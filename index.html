@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>전장 복기 노트</title>
+<style>
+:root{--bg:#f4f4f1;--panel:#fff;--line:#d8d8d2;--text:#1f1f1f;--muted:#6f6f6a;--hover:#f0f0eb}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font:13px/1.45 system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden}
+.bar{display:flex;gap:4px;align-items:center;padding:5px 8px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.bar .title{font-weight:600;font-size:14px;margin-right:6px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grow{flex:1}
+button,select,input,textarea{font:inherit;color:inherit}
+button{padding:3px 8px;border:1px solid var(--line);background:#fff;border-radius:5px;cursor:pointer;white-space:nowrap}
+button:hover{background:var(--hover)}
+button:disabled{opacity:.4;cursor:default}
+button.on{background:var(--text);color:#fff;border-color:var(--text)}
+button.danger{color:#b91c1c}
+input[type=text],input[type=number],input[type=date],select,textarea{border:1px solid var(--line);border-radius:5px;padding:3px 6px;background:#fff}
+input[type=number]{width:72px}
+input[type=color]{width:30px;height:24px;padding:0 1px;border:1px solid var(--line);border-radius:5px;background:#fff;vertical-align:middle}
+.sep{width:1px;height:20px;background:var(--line);margin:0 3px}
+#timeline{display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--panel);border-bottom:1px solid var(--line)}
+#stepLabel{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px}
+#chips{display:flex;gap:3px;overflow-x:auto;flex:1;align-items:center;scrollbar-width:thin;padding:2px 0;position:relative}
+.chip{flex:none;padding:1px 7px;border-radius:9px;border:1px solid var(--line);font-size:12px;cursor:pointer;white-space:nowrap;position:relative}
+.chip.cur{outline:2px solid var(--text);outline-offset:-1px;font-weight:600}
+.chip.own::after{content:"";position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:var(--text)}
+.grp{flex:none;font-size:11px;color:var(--muted);padding-left:8px;white-space:nowrap}
+main{flex:1;display:flex;min-height:0}
+#boardWrap{flex:1;min-width:0;position:relative;background:#e6e6e1}
+#board{width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
+#side{width:340px;flex:none;background:var(--panel);border-left:1px solid var(--line);overflow-y:auto}
+.sec{border-bottom:1px solid var(--line);padding:8px 10px}
+.sec h3{margin:0 0 6px;font-size:13px}
+.muted{color:var(--muted);font-size:12px}
+textarea{width:100%;resize:vertical}
+#memo{min-height:150px;margin-top:6px}
+.row{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin:4px 0}
+.row label{color:var(--muted);font-size:12px}
+.u{display:flex;align-items:center;gap:4px;padding:3px 0;border-top:1px dashed var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.u .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.u button{padding:1px 5px;font-size:12px}
+.ph{font-size:12px;font-weight:600;margin-top:8px}
+.swatch{width:20px;height:20px;border-radius:4px;border:1px solid var(--line);cursor:pointer;padding:0}
+dialog{border:1px solid var(--line);border-radius:8px;padding:14px;max-width:540px;width:95vw}
+dialog h2{margin:0 0 10px;font-size:15px}
+dialog .row>label:first-child{width:95px}
+#hint{position:absolute;left:8px;bottom:8px;right:8px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:5px;padding:3px 8px;font-size:12px;color:var(--muted);pointer-events:none;width:fit-content;max-width:calc(100% - 16px)}
+details summary{cursor:pointer;font-weight:600}
+#help p{margin:4px 0}
+@media (max-width:820px){main{flex-direction:column}#side{width:auto;height:42vh;border-left:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="title" id="gameTitle"></span>
+  <button id="bNew">새 게임</button>
+  <button id="bSettings">게임 설정</button>
+  <span class="sep"></span>
+  <button id="bImport">불러오기</button>
+  <button id="bExport">내보내기(JSON)</button>
+  <button id="bPng">PNG 저장</button>
+  <input type="file" id="fileIn" accept=".json,application/json" hidden>
+  <span class="grow"></span>
+  <button id="bUndo" title="Ctrl+Z">↶ 실행취소</button>
+  <button id="bRedo" title="Ctrl+Y">↷ 다시</button>
+</div>
+<div class="bar" id="tools">
+  <button data-tool="select" title="V">선택/이동</button>
+  <button data-tool="pan" title="H 또는 Space+드래그">화면 이동</button>
+  <span class="sep"></span>
+  <button data-tool="rect">▭ 지형</button>
+  <button data-tool="ellipse">◯ 지형</button>
+  <button data-tool="tri" title="드래그 시작점이 직각 모서리가 됩니다">◺ 지형</button>
+  <button data-tool="poly">⬠ 지형</button>
+  <button id="bObj">+ 목표 마커</button>
+  <button id="b40kSet" title="11판 표준 지형 영역 16개를 맵 아래쪽 바깥에 늘어놓습니다">+ 40K 지형 세트</button>
+  <span class="sep"></span>
+  <button data-tool="line">선</button>
+  <button data-tool="arrow">화살표</button>
+  <input type="color" id="drawColor" value="#111111" title="선/화살표 색">
+  <button data-tool="measure">거리 측정</button>
+  <span class="sep"></span>
+  <button id="tGhost" title="이전 단계 위치를 점선으로 표시">이전 위치</button>
+  <button id="tGrid">격자</button>
+  <button id="tLock" title="지형을 클릭/이동하지 않게 고정">지형 잠금</button>
+  <span class="sep"></span>
+  <button id="bZoomOut">−</button>
+  <button id="bFit">맞춤</button>
+  <button id="bZoomIn">+</button>
+</div>
+<div id="timeline">
+  <button id="bPrev" title="이전 단계 ( , )">◀</button>
+  <span id="stepLabel"></span>
+  <button id="bNext" title="다음 단계 ( . )">▶</button>
+  <div id="chips"></div>
+</div>
+<main>
+  <div id="boardWrap"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg><div id="hint"></div></div>
+  <aside id="side">
+    <div class="sec" id="secMemo"></div>
+    <div class="sec" id="secSel"></div>
+    <div class="sec" id="secUnits">
+      <h3>유닛 추가</h3>
+      <div class="row"><input type="text" id="uName" placeholder="유닛 이름" style="flex:1;min-width:120px"><select id="uSide"></select></div>
+      <div class="row"><select id="uBase"></select><select id="uShape"><option value="circle">원형</option><option value="oval">타원형</option></select></div>
+      <div class="row"><label>베이스(mm)</label><input type="number" id="uW" min="5" step="1" value="32"><span id="uHWrap">× <input type="number" id="uH" min="5" step="1" value="32"></span></div>
+      <div class="row"><label>모델 수</label><input type="number" id="uN" min="1" max="300" value="5" style="width:60px"><button id="uAdd">유닛 추가</button><button id="uCancel" hidden>취소</button></div>
+      <div id="uList"></div>
+    </div>
+    <div class="sec"><details><summary>게임 전체 메모</summary><textarea id="gameMemo" rows="7" placeholder="리스트, 미션, 상대, 전체 소감 등"></textarea></details></div>
+    <div class="sec"><details><summary>사용법</summary><div class="muted" id="help">
+      <p><b>순서</b>: 게임 설정(맵 크기·페이즈) → 지형 그리기 → 유닛 추가 → 단계를 넘기며 모델을 옮기고 메모.</p>
+      <p><b>40K 지형 세트</b>: 11판 표준 지형 영역 16개(대형 7"×11.5" ×4, 직각삼각형 8"×11.5" ×2, 중형 6"×4" ×4, 긴 라인 10"×2.5" ×2, 짧은 라인 6"×2" ×4)를 맵 아래쪽 바깥에 꺼내 놓습니다. 끌어다 배치하고 R로 회전, 삼각형은 선택 후 뒤집기를 쓰세요. 다 놓았으면 “지형 잠금”을 켜 두면 편합니다.</p>
+      <p><b>배치 이어받기</b>: 아직 손대지 않은 단계는 직전 단계의 배치를 그대로 보여줍니다. 그 단계에서 모델을 처음 움직이는 순간 배치가 복사되어 그 단계만의 기록이 됩니다.</p>
+      <p><b>선택</b>: 클릭 · Shift+클릭 추가 · 같은 모델 빠르게 두 번 클릭 = 유닛 전체 · 빈 곳 드래그 = 범위 선택</p>
+      <p><b>단축키</b>: R / Shift+R 회전 · K 사상자 표시 · Delete 테이블에서 제거 · , . 이전/다음 단계 · Ctrl+Z 실행취소 · Esc 취소 · Space+드래그 화면 이동 · 휠 확대/축소</p>
+      <p><b>저장</b>: 브라우저에 자동 저장되지만, 보관은 반드시 “내보내기(JSON)”로 하세요. 그 파일을 “불러오기”로 다시 열 수 있습니다.</p>
+    </div></details></div>
+  </aside>
+</main>
+
+<dialog id="dlg">
+  <h2>게임 설정</h2>
+  <div class="row"><label>제목</label><input type="text" id="sTitle" style="flex:1"></div>
+  <div class="row"><label>날짜</label><input type="date" id="sDate"></div>
+  <div class="row"><label>맵 크기</label><input type="number" id="sW" step="0.5" min="1"> × <input type="number" id="sH" step="0.5" min="1"><select id="sUnit"><option value="in">인치</option><option value="cm">cm</option></select></div>
+  <div class="row"><label>프리셋</label><select id="sPreset"></select></div>
+  <div class="row"><label>게임 전 단계</label><input type="text" id="sPre" style="flex:1" placeholder="쉼표로 구분 (예: 배치, 정찰 이동)"></div>
+  <div class="row"><label>라운드 수</label><input type="number" id="sRounds" min="1" max="30"></div>
+  <div class="row"><label>페이즈</label><input type="text" id="sPhases" style="flex:1" placeholder="쉼표로 구분"></div>
+  <div class="row" style="align-items:flex-start"><label>플레이어<br><span class="muted">턴 순서대로</span></label><div id="sPlayers" style="flex:1"></div></div>
+  <div class="row"><label></label><button type="button" id="sAddPlayer">+ 플레이어</button></div>
+  <p class="muted">단계 기록은 순서 번호로 저장되므로 이름을 바꿔도 유지됩니다. 라운드·페이즈 수를 줄이면 해당 기록은 숨겨질 뿐, 다시 늘리면 돌아옵니다.</p>
+  <div class="row" style="justify-content:flex-end"><button type="button" id="sCancel">취소</button><button type="button" id="sOk">저장</button></div>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+const KEY = 'battle-replay-notes-v1';
+const $ = id => document.getElementById(id);
+const svg = $('board');
+const uid = () => Math.random().toString(36).slice(2, 10);
+const clone = o => JSON.parse(JSON.stringify(o));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+const r2 = v => Math.round(v * 100) / 100;
+
+const PRESETS = {
+  '40k':  {label:'워해머 40K', pre:['배치'], rounds:5, phases:['커맨드','이동','사격','돌격','전투'], board:[60,44,'in']},
+  'aos':  {label:'에이지 오브 시그마', pre:['배치'], rounds:5, phases:['영웅','이동','사격','돌격','전투','종료'], board:[60,44,'in']},
+  'kt':   {label:'킬팀 (턴포인트)', pre:['배치'], rounds:4, phases:['전략','교전'], board:[30,22,'in']},
+  'turn': {label:'단순 턴제 (페이즈 1개)', pre:['배치'], rounds:6, phases:['턴'], board:[48,48,'in']},
+};
+const BASES = [['circle',25],['circle',28],['circle',32],['circle',40],['circle',50],['circle',60],['circle',80],['circle',90],['circle',100],['circle',130],['circle',160],
+  ['oval',60,35],['oval',75,42],['oval',90,52],['oval',105,70],['oval',120,92],['oval',150,95],['oval',170,105]];
+const TERRAIN_COLORS = ['#8a8a80','#4d7c3a','#a0703c','#2563eb','#dc2626','#d4a017','#7c3aed'];
+
+function newState() {
+  return {version:1, meta:{title:'새 게임', date:today(), memo:''}, board:{w:60, h:44, unit:'in'},
+    structure:{pre:['배치'], rounds:5, phases:['커맨드','이동','사격','돌격','전투'],
+      players:[{name:'플레이어 1', color:'#2563eb'},{name:'플레이어 2', color:'#dc2626'}]},
+    units:[], models:[], terrain:[], steps:{}};
+}
+function normalize(d) {
+  if (!d || typeof d !== 'object') throw new Error('올바른 복기 파일이 아닙니다.');
+  const b = newState();
+  const s = {...b, ...d, meta:{...b.meta, ...(d.meta||{})}, board:{...b.board, ...(d.board||{})}, structure:{...b.structure, ...(d.structure||{})}};
+  ['units','models','terrain'].forEach(k => { if (!Array.isArray(s[k])) s[k] = []; });
+  if (!s.steps || typeof s.steps !== 'object') s.steps = {};
+  const st = s.structure;
+  if (!Array.isArray(st.players) || !st.players.length) st.players = b.structure.players;
+  if (!Array.isArray(st.pre)) st.pre = [];
+  if (!Array.isArray(st.phases) || !st.phases.length) st.phases = ['턴'];
+  st.rounds = Math.max(1, Math.min(30, parseInt(st.rounds) || 1));
+  if (!(s.board.w > 0) || !(s.board.h > 0)) s.board = b.board;
+  if (s.board.unit !== 'cm') s.board.unit = 'in';
+  return s;
+}
+
+let S;
+try { S = normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) { S = newState(); }
+let cur = 0;
+try { cur = parseInt(localStorage.getItem(KEY + '-cur')) || 0; } catch (e) {}
+const ui = {tool:'select', sel:[], grid:true, ghost:false, lock:false, poly:null, polyHover:null, measure:null, marquee:null, temp:null, terrainColor:'#8a8a80', editUnit:null};
+let vb = {x:0, y:0, w:100, h:100};
+let undoStack = [], redoStack = [];
+let spaceDown = false;
+
+// ---------- 기본 계산 ----------
+const K = () => S.board.unit === 'cm' ? 10 : 25.4;          // 맵 단위 → mm
+const BW = () => S.board.w * K(), BH = () => S.board.h * K();
+const fsBase = () => Math.max(5, Math.min(14, Math.max(BW(), BH()) / 150));
+const strokeW = () => Math.max(1.5, Math.max(BW(), BH()) / 600);
+const fmtLen = mm => S.board.unit === 'cm' ? (mm/10).toFixed(1) + 'cm' : (mm/25.4).toFixed(1) + '"';
+const playerColor = i => (S.structure.players[i] || {}).color || '#777';
+const playerName = i => (S.structure.players[i] || {}).name || ('플레이어 ' + (i+1));
+function tint(hex, a) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#ddd';
+  const n = parseInt(m[1], 16), f = c => Math.round(c + (255 - c) * a);
+  return `rgb(${f(n>>16)},${f(n>>8&255)},${f(n&255)})`;
+}
+
+function stepList() {
+  const s = S.structure, out = [];
+  s.pre.forEach((n, i) => out.push({key:'pre'+i, label:n, short:n, round:0, player:-1}));
+  for (let r = 1; r <= s.rounds; r++)
+    s.players.forEach((p, pi) => s.phases.forEach((ph, fi) =>
+      out.push({key:`r${r}p${pi}f${fi}`, label:`${r}라운드 · ${p.name} · ${ph}`, short:ph, round:r, player:pi})));
+  return out;
+}
+const curKey = () => stepList()[cur].key;
+function effPos(idx) {
+  const L = stepList();
+  for (let i = Math.min(idx, L.length-1); i >= 0; i--) { const st = S.steps[L[i].key]; if (st && st.pos) return {pos:st.pos, from:i}; }
+  return {pos:{}, from:-1};
+}
+function stepObj(k) { return S.steps[k] || (S.steps[k] = {draw:[], memo:''}); }
+function ownPos() {            // 이 단계 배치가 없으면 이어받은 배치를 복사해서 이 단계 것으로 만든다
+  const st = stepObj(curKey());
+  if (!st.pos) st.pos = clone(effPos(cur).pos);
+  return st.pos;
+}
+const curDraws = () => (S.steps[curKey()] || {}).draw || [];
+const unitMap = () => Object.fromEntries(S.units.map(u => [u.id, u]));
+const isSel = (k, id) => ui.sel.some(s => s.k === k && s.id === id);
+
+// ---------- 저장 / 실행취소 ----------
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); localStorage.setItem(KEY + '-cur', cur); } catch (e) {}
+}
+function pushUndo() { undoStack.push(JSON.stringify(S)); if (undoStack.length > 80) undoStack.shift(); redoStack = []; }
+function undo() { if (!undoStack.length) return; redoStack.push(JSON.stringify(S)); S = JSON.parse(undoStack.pop()); ui.sel = []; commit(); }
+function redo() { if (!redoStack.length) return; undoStack.push(JSON.stringify(S)); S = JSON.parse(redoStack.pop()); ui.sel = []; commit(); }
+function commit() { cur = Math.max(0, Math.min(cur, stepList().length - 1)); save(); renderAll(); }
+
+// ---------- 화면(뷰) ----------
+function fitAspect() {
+  const cw = svg.clientWidth || 800, ch = svg.clientHeight || 600, cx = vb.x + vb.w/2, cy = vb.y + vb.h/2;
+  const ratio = cw / ch;
+  if (vb.w / vb.h > ratio) vb.h = vb.w / ratio; else vb.w = vb.h * ratio;
+  vb.x = cx - vb.w/2; vb.y = cy - vb.h/2;
+}
+function fit() {
+  const W = BW(), H = BH(), m = Math.max(W, H) * 0.04 + 15;
+  const cw = svg.clientWidth || 800, ch = svg.clientHeight || 600;
+  const w0 = W + 2*m, h0 = H + 2*m;
+  const sc = Math.max(w0 / cw, h0 / ch);
+  vb = {w:cw*sc, h:ch*sc}; vb.x = W/2 - vb.w/2; vb.y = H/2 - vb.h/2;
+  svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+}
+function zoomAt(px, py, f) {
+  vb.x = px - (px - vb.x) * f; vb.y = py - (py - vb.y) * f; vb.w *= f; vb.h *= f;
+  svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+}
+function toBoard(e) {
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse()); return {x:p.x, y:p.y};
+}
+const pxToMm = px => px / (svg.getScreenCTM().a || 1);
+
+// ---------- 그리기 ----------
+function labelFs(name, w, h) {
+  let est = 0; for (const ch of String(name)) est += ch.charCodeAt(0) > 0x2e80 ? 1 : 0.62;
+  est = Math.max(est, 1.5);
+  return Math.max(2.5, Math.min(h * 0.42, (w * 0.88) / est, 16));
+}
+function baseShape(u, attrs, grow = 0) {
+  const rx = u.w/2 + grow, ry = (u.shape === 'oval' ? u.h : u.w)/2 + grow;
+  return u.shape === 'oval' ? `<ellipse rx="${rx}" ry="${ry}" ${attrs}/>` : `<circle r="${rx}" ${attrs}/>`;
+}
+function arrowSvg(d, col, sw) {
+  const a = Math.atan2(d.y2 - d.y1, d.x2 - d.x1), hl = Math.max(sw * 5, fsBase()), hw = hl * 0.55;
+  const bx = d.x2 - hl * Math.cos(a), by = d.y2 - hl * Math.sin(a);
+  const lx = d.x2 - hl * 0.7 * Math.cos(a), ly = d.y2 - hl * 0.7 * Math.sin(a);
+  return `<line x1="${d.x1}" y1="${d.y1}" x2="${lx}" y2="${ly}" stroke="${col}" stroke-width="${sw}" stroke-linecap="round"/>` +
+    `<polygon points="${d.x2},${d.y2} ${bx + hw*Math.sin(a)},${by - hw*Math.cos(a)} ${bx - hw*Math.sin(a)},${by + hw*Math.cos(a)}" fill="${col}"/>`;
+}
+// 직각삼각형: 직각이 왼쪽 아래 (뒤집기로 다른 모서리로)
+const triPts = (w, h) => `${-w/2},${-h/2} ${-w/2},${h/2} ${w/2},${h/2}`;
+const triFlip = T => ({flipX: T.a.x > T.b.x, flipY: T.a.y < T.b.y});   // 드래그 시작점이 직각 모서리
+function polyCenter(pts) { let x = 0, y = 0; pts.forEach(p => { x += p[0]; y += p[1]; }); return [x/pts.length, y/pts.length]; }
+
+function renderBoard() {
+  svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  const W = BW(), H = BH(), k = K(), fb = fsBase(), cm = S.board.unit === 'cm';
+  let h = `<rect x="0" y="0" width="${W}" height="${H}" fill="#fbfbf8" stroke="#555" stroke-width="1.2"/>`;
+  // 격자
+  const minorU = cm ? 2 : 1, ratio = cm ? 5 : 6, minor = minorU * k;
+  if (ui.grid) {
+    for (let i = 1; i * minor < W - 0.01; i++) { const M = i % ratio === 0, x = i * minor;
+      h += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="${M ? '#cfcfc6' : '#ecece6'}" stroke-width="${M ? 0.8 : 0.4}"/>`; }
+    for (let i = 1; i * minor < H - 0.01; i++) { const M = i % ratio === 0, y = i * minor;
+      h += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="${M ? '#cfcfc6' : '#ecece6'}" stroke-width="${M ? 0.8 : 0.4}"/>`; }
+    h += `<line x1="${W/2}" y1="0" x2="${W/2}" y2="${H}" stroke="#a9a9a0" stroke-width="0.8" stroke-dasharray="6 5"/>`;
+    h += `<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#a9a9a0" stroke-width="0.8" stroke-dasharray="6 5"/>`;
+  }
+  // 눈금
+  const majorU = minorU * ratio, fr = fb * 0.85;
+  for (let v = 0; v * k <= W + 0.01; v += majorU) h += `<text x="${v*k}" y="${-fr*0.6}" font-size="${fr}" text-anchor="middle" fill="#999">${v}</text>`;
+  for (let v = majorU; v * k <= H + 0.01; v += majorU) h += `<text x="${-fr*0.5}" y="${v*k}" font-size="${fr}" text-anchor="end" dominant-baseline="central" fill="#999">${v}</text>`;
+
+  // 지형
+  for (const t of S.terrain) {
+    const sel = isSel('terrain', t.id), op = t.op ?? 0.35;
+    const st = sel ? `stroke="#111" stroke-width="${strokeW()}" stroke-dasharray="6 4"` : `stroke="${t.fill}" stroke-width="1.2"`;
+    const paint = `fill="${t.fill}" fill-opacity="${op}" ${st}`;
+    let shape, cx, cy, size;
+    if (t.type === 'poly') {
+      shape = `<polygon points="${t.pts.map(p => p.join(',')).join(' ')}" ${paint}/>`;
+      [cx, cy] = polyCenter(t.pts);
+      const xs = t.pts.map(p => p[0]), ys = t.pts.map(p => p[1]);
+      size = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    } else {
+      const fx = t.flipX ? -1 : 1, fy = t.flipY ? -1 : 1;
+      const inner = t.type === 'rect'
+        ? `<rect x="${-t.w/2}" y="${-t.h/2}" width="${t.w}" height="${t.h}" ${paint}/>`
+        : t.type === 'tri'
+        ? `<polygon points="${triPts(t.w, t.h)}" transform="scale(${fx} ${fy})" ${paint}/>`
+        : `<ellipse rx="${t.w/2}" ry="${t.h/2}" ${paint}/>`;
+      shape = `<g transform="translate(${t.x} ${t.y}) rotate(${t.rot || 0})">${inner}</g>`;
+      cx = t.x; cy = t.y; size = Math.min(t.w, t.h);
+      if (t.type === 'tri') {             // 라벨은 삼각형 무게중심에
+        const lx = fx * -t.w/6, ly = fy * t.h/6, a = (t.rot || 0) * Math.PI / 180;
+        cx = t.x + lx * Math.cos(a) - ly * Math.sin(a); cy = t.y + lx * Math.sin(a) + ly * Math.cos(a); size *= 0.6;
+      }
+    }
+    const fs = Math.max(4, Math.min(fb * 1.4, size * 0.3));
+    h += `<g data-kind="terrain" data-id="${t.id}"${ui.lock ? ' pointer-events="none"' : ''} style="cursor:${ui.lock || ui.tool !== 'select' ? 'default' : 'move'}">${shape}` +
+      (t.label ? `<text x="${cx}" y="${cy}" font-size="${fs}" text-anchor="middle" dominant-baseline="central" fill="#222" fill-opacity=".8" pointer-events="none">${esc(t.label)}</text>` : '') + `</g>`;
+  }
+
+  const UM = unitMap();
+  const E = effPos(cur).pos;
+  // 이전 위치(고스트)
+  if (ui.ghost && cur > 0) {
+    const prev = effPos(cur - 1).pos;
+    for (const id in prev) {
+      const a = prev[id], b = E[id], m = S.models.find(m => m.id === id); if (!m) continue;
+      const u = UM[m.unitId]; if (!u) continue;
+      if (b && Math.hypot(a.x - b.x, a.y - b.y) < 0.5 && (a.r || 0) === (b.r || 0) && !!a.dead === !!b.dead) continue;
+      const col = playerColor(u.side);
+      h += `<g pointer-events="none" opacity=".7"><g transform="translate(${a.x} ${a.y}) rotate(${a.r || 0})">${baseShape(u, `fill="none" stroke="${col}" stroke-width="0.8" stroke-dasharray="3 2"`)}</g>` +
+        (b ? `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="0.8" stroke-dasharray="3 2"/>` : '') + `</g>`;
+    }
+  }
+  // 모델
+  const placed = S.models.filter(m => E[m.id] && UM[m.unitId]);
+  placed.sort((a, b) => (E[a.id].dead ? 0 : 1) - (E[b.id].dead ? 0 : 1));
+  for (const m of placed) {
+    const u = UM[m.unitId], p = E[m.id], col = playerColor(u.side), sel = isSel('model', m.id);
+    const bh = u.shape === 'oval' ? u.h : u.w;
+    const x = p.dead ? `<line x1="${-u.w*0.3}" y1="${-bh*0.3}" x2="${u.w*0.3}" y2="${bh*0.3}" stroke="#111" stroke-width="1"/><line x1="${u.w*0.3}" y1="${-bh*0.3}" x2="${-u.w*0.3}" y2="${bh*0.3}" stroke="#111" stroke-width="1"/>` : '';
+    h += `<g data-kind="model" data-id="${m.id}" transform="translate(${p.x} ${p.y})" opacity="${p.dead ? 0.35 : 1}" style="cursor:${ui.tool === 'select' ? 'move' : 'default'}">` +
+      `<title>${esc(u.name)} #${m.n}${p.dead ? ' (사상자)' : ''}</title><g transform="rotate(${p.r || 0})">` +
+      baseShape(u, `fill="${tint(col, 0.72)}" stroke="${col}" stroke-width="1"`) +
+      (sel ? baseShape(u, `fill="none" stroke="#111" stroke-width="1.4" stroke-dasharray="3 2"`, 2.2) : '') + x +
+      `</g><text font-size="${labelFs(u.name, u.w, Math.min(u.w, bh))}" text-anchor="middle" dominant-baseline="central" fill="#111" pointer-events="none">${esc(u.name)}</text></g>`;
+  }
+  // 선·화살표
+  for (const d of curDraws()) {
+    const sel = isSel('draw', d.id), sw = d.w || strokeW();
+    h += `<g data-kind="draw" data-id="${d.id}" style="cursor:${ui.tool === 'select' ? 'move' : 'default'}">` +
+      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="transparent" stroke-width="${sw + 8}" stroke-linecap="round"/>` +
+      (sel ? `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="#111" stroke-opacity=".25" stroke-width="${sw + 5}" stroke-linecap="round"/>` : '') +
+      (d.type === 'arrow' ? arrowSvg(d, d.color, sw) : `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${d.color}" stroke-width="${sw}" stroke-linecap="round"/>`) + `</g>`;
+  }
+  // 오버레이
+  h += `<g pointer-events="none">`;
+  const T = ui.temp;
+  if (T) {
+    const x = Math.min(T.a.x, T.b.x), y = Math.min(T.a.y, T.b.y), w = Math.abs(T.a.x - T.b.x), hh = Math.abs(T.a.y - T.b.y);
+    if (T.tool === 'rect') h += `<rect x="${x}" y="${y}" width="${w}" height="${hh}" fill="${ui.terrainColor}" fill-opacity=".3" stroke="#111" stroke-dasharray="5 4"/>`;
+    if (T.tool === 'ellipse') h += `<ellipse cx="${x + w/2}" cy="${y + hh/2}" rx="${w/2}" ry="${hh/2}" fill="${ui.terrainColor}" fill-opacity=".3" stroke="#111" stroke-dasharray="5 4"/>`;
+    if (T.tool === 'line') h += `<line x1="${T.a.x}" y1="${T.a.y}" x2="${T.b.x}" y2="${T.b.y}" stroke="${$('drawColor').value}" stroke-width="${strokeW()}" stroke-linecap="round"/>`;
+    if (T.tool === 'arrow') h += arrowSvg({x1:T.a.x, y1:T.a.y, x2:T.b.x, y2:T.b.y}, $('drawColor').value, strokeW());
+    if (T.tool === 'tri') { const f = triFlip(T);
+      h += `<g transform="translate(${x + w/2} ${y + hh/2})"><polygon points="${triPts(w, hh)}" transform="scale(${f.flipX ? -1 : 1} ${f.flipY ? -1 : 1})" fill="${ui.terrainColor}" fill-opacity=".3" stroke="#111" stroke-dasharray="5 4"/></g>`; }
+    if (T.tool === 'rect' || T.tool === 'ellipse' || T.tool === 'tri') h += `<text x="${x + w/2}" y="${y - fb*0.5}" font-size="${fb}" text-anchor="middle" fill="#111">${fmtLen(w)} × ${fmtLen(hh)}</text>`;
+  }
+  const M = ui.measure;
+  if (M) {
+    const d = Math.hypot(M.b.x - M.a.x, M.b.y - M.a.y);
+    h += `<line x1="${M.a.x}" y1="${M.a.y}" x2="${M.b.x}" y2="${M.b.y}" stroke="#7c3aed" stroke-width="${strokeW()*0.8}" stroke-dasharray="6 4"/>` +
+      `<circle cx="${M.a.x}" cy="${M.a.y}" r="${strokeW()}" fill="#7c3aed"/><circle cx="${M.b.x}" cy="${M.b.y}" r="${strokeW()}" fill="#7c3aed"/>` +
+      `<text x="${(M.a.x + M.b.x)/2}" y="${(M.a.y + M.b.y)/2 - fb*0.6}" font-size="${fb*1.3}" text-anchor="middle" fill="#7c3aed" stroke="#fff" stroke-width="${fb*0.3}" paint-order="stroke" font-weight="600">${fmtLen(d)}</text>`;
+  }
+  if (ui.poly && ui.poly.length) {
+    const pts = ui.poly.concat(ui.polyHover ? [[ui.polyHover.x, ui.polyHover.y]] : []);
+    h += `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="${ui.terrainColor}" fill-opacity=".25" stroke="#111" stroke-dasharray="5 4"/>`;
+    h += `<circle cx="${ui.poly[0][0]}" cy="${ui.poly[0][1]}" r="${fb*0.5}" fill="#fff" stroke="#111"/>`;
+  }
+  if (ui.marquee) {
+    const q = ui.marquee, x = Math.min(q.a.x, q.b.x), y = Math.min(q.a.y, q.b.y);
+    h += `<rect x="${x}" y="${y}" width="${Math.abs(q.a.x - q.b.x)}" height="${Math.abs(q.a.y - q.b.y)}" fill="#2563eb" fill-opacity=".08" stroke="#2563eb" stroke-dasharray="4 3"/>`;
+  }
+  h += `</g>`;
+  svg.innerHTML = h;
+}
+
+function renderTimeline() {
+  const L = stepList(); cur = Math.max(0, Math.min(cur, L.length - 1));
+  $('stepLabel').textContent = `${cur + 1}/${L.length} · ${L[cur].label}`;
+  let h = '', lastG = null;
+  L.forEach((s, i) => {
+    const g = s.round ? `R${s.round} ${playerName(s.player)}` : '게임 전';
+    if (g !== lastG) { h += `<span class="grp">${esc(g)}</span>`; lastG = g; }
+    const st = S.steps[s.key], own = st && (st.pos || st.memo || (st.draw && st.draw.length));
+    const bg = s.player >= 0 ? tint(playerColor(s.player), 0.86) : '#fff';
+    h += `<span class="chip${i === cur ? ' cur' : ''}${own ? ' own' : ''}" data-i="${i}" style="background:${bg}" title="${esc(s.label)}">${esc(s.short)}</span>`;
+  });
+  const chips = $('chips'); chips.innerHTML = h;
+  const c = chips.querySelector('.chip.cur');
+  if (c) { const l = c.offsetLeft - chips.offsetLeft, r = l + c.offsetWidth;
+    if (l < chips.scrollLeft) chips.scrollLeft = l - 40; else if (r > chips.scrollLeft + chips.clientWidth) chips.scrollLeft = r - chips.clientWidth + 40; }
+  $('bPrev').disabled = cur <= 0; $('bNext').disabled = cur >= L.length - 1;
+}
+
+function renderMemo() {
+  const L = stepList(), s = L[cur], st = S.steps[s.key], eff = effPos(cur), own = !!(st && st.pos);
+  const status = own ? '이 단계의 배치를 직접 기록했습니다.'
+    : eff.from >= 0 ? `배치: “${esc(L[eff.from].label)}” 단계를 이어서 표시 중 · 모델을 움직이면 이 단계로 복사됩니다.`
+    : '아직 배치된 모델이 없습니다.';
+  $('secMemo').innerHTML = `<h3>${esc(s.label)}</h3><div class="muted">${status}</div>` +
+    (own && cur > 0 ? `<div class="row"><button id="bReset">이전 단계 배치로 되돌리기</button></div>` : '') +
+    `<textarea id="memo" placeholder="이 단계의 상황, 내 판단과 이유, 아쉬운 점, 다음에 시도할 것…"></textarea>`;
+  const memo = $('memo'); memo.value = (st && st.memo) || '';
+  memo.oninput = () => { stepObj(s.key).memo = memo.value; save();
+    const c = $('chips').querySelector('.chip.cur'); if (c) c.classList.toggle('own', !!(memo.value || (S.steps[s.key].pos) || S.steps[s.key].draw.length)); };
+  const br = $('bReset');
+  if (br) br.onclick = () => { if (!confirm('이 단계에서 옮긴 위치를 버리고 이전 단계 배치를 다시 이어받을까요?')) return;
+    pushUndo(); delete S.steps[s.key].pos; ui.sel = []; commit(); };
+}
+
+function renderSel() {
+  const box = $('secSel');
+  if (!ui.sel.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  const ms = ui.sel.filter(s => s.k === 'model'), ts = ui.sel.filter(s => s.k === 'terrain'), ds = ui.sel.filter(s => s.k === 'draw');
+  let h = '<h3>선택 항목</h3>';
+  if (ms.length) {
+    const UM = unitMap(), cnt = {};
+    ms.forEach(s => { const m = S.models.find(m => m.id === s.id); const u = m && UM[m.unitId]; if (u) cnt[u.name] = (cnt[u.name] || 0) + 1; });
+    const E = effPos(cur).pos, first = E[ms[0].id] || {};
+    h += `<div class="muted">모델 ${ms.length}개: ${Object.entries(cnt).map(([n, c]) => esc(n) + ' ' + c).join(', ')}</div>
+      <div class="row"><button id="sDead">사상자 표시/해제 (K)</button><button id="sRemove">테이블에서 제거 (Del)</button></div>
+      <div class="row"><button id="sUnitAll">유닛 전체 선택</button><label>회전</label><input type="number" id="sRot" step="15" value="${first.r || 0}" style="width:60px">°
+      <button id="sRotL">⟲</button><button id="sRotR">⟳</button></div>`;
+  }
+  if (ts.length === 1) {
+    const t = S.terrain.find(t => t.id === ts[0].id);
+    if (t) {
+      h += `<div class="ph">지형 ${({poly:'(다각형)', rect:'(사각형)', tri:'(직각삼각형)'})[t.type] || '(원/타원)'}</div>
+        <div class="row"><label>이름</label><input type="text" id="tLabel" value="${esc(t.label)}" placeholder="예: 폐허 A, 숲, 배치구역" style="flex:1"></div>
+        <div class="row"><label>색</label>${TERRAIN_COLORS.map(c => `<button class="swatch" data-c="${c}" style="background:${c}"></button>`).join('')}<input type="color" id="tColor" value="${t.fill}"></div>
+        <div class="row"><label>불투명도</label><input type="range" id="tOp" min="0.05" max="1" step="0.05" value="${t.op ?? 0.35}"></div>` +
+        (t.type !== 'poly' ? `<div class="row"><label>크기(${S.board.unit === 'cm' ? 'cm' : '인치'})</label><input type="number" id="tW" step="0.5" value="${r2(t.w / K())}"> × <input type="number" id="tH" step="0.5" value="${r2(t.h / K())}"></div>
+        <div class="row"><label>회전</label><input type="number" id="tRot" step="15" value="${t.rot || 0}" style="width:60px">°
+        <button id="tRotL">⟲</button><button id="tRotR">⟳</button></div>` : '') +
+        (t.type === 'tri' ? `<div class="row"><label>뒤집기</label><button id="tFlipX">↔ 좌우</button><button id="tFlipY">↕ 상하</button></div>` : '') +
+        `<div class="row"><button id="tBack">맨 뒤로</button><button id="tFront">맨 앞으로</button><button id="tDup">복제</button><button id="tDel" class="danger">삭제</button></div>`;
+    }
+  } else if (ts.length > 1) h += `<div class="row"><span class="muted">지형 ${ts.length}개</span><button id="tDel" class="danger">지형 삭제</button></div>`;
+  if (ds.length) {
+    const d = curDraws().find(d => d.id === ds[0].id);
+    h += `<div class="ph">선/화살표 ${ds.length}개</div><div class="row"><label>색</label><input type="color" id="dColor" value="${d ? d.color : '#111111'}">
+      <label>굵기</label><input type="number" id="dW" step="0.5" min="0.5" value="${d ? r2(d.w || strokeW()) : 2}" style="width:60px">mm<button id="dDel" class="danger">삭제</button></div>`;
+  }
+  box.innerHTML = h;
+  const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+  on('sDead', 'click', toggleDead);
+  on('sRemove', 'click', deleteSel);
+  on('sUnitAll', 'click', () => { const m = S.models.find(m => m.id === ms[0].id); if (m) selectUnit(m.unitId); });
+  on('sRotL', 'click', () => rotateSel(-15));
+  on('sRotR', 'click', () => rotateSel(15));
+  on('sRot', 'change', e => { const v = parseFloat(e.target.value) || 0; pushUndo(); const pos = ownPos();
+    ui.sel.filter(s => s.k === 'model').forEach(s => { if (pos[s.id]) pos[s.id].r = ((v % 360) + 360) % 360; }); commit(); });
+  const T1 = ts.length === 1 ? S.terrain.find(t => t.id === ts[0].id) : null;
+  const tset = (fn) => { pushUndo(); fn(T1); commit(); };
+  on('tLabel', 'change', e => tset(t => t.label = e.target.value));
+  box.querySelectorAll('.swatch').forEach(b => b.onclick = () => tset(t => { t.fill = b.dataset.c; ui.terrainColor = b.dataset.c; }));
+  on('tColor', 'change', e => tset(t => { t.fill = e.target.value; ui.terrainColor = e.target.value; }));
+  on('tOp', 'change', e => tset(t => t.op = parseFloat(e.target.value)));
+  on('tW', 'change', e => { const v = parseFloat(e.target.value); if (v > 0) tset(t => t.w = v * K()); });
+  on('tH', 'change', e => { const v = parseFloat(e.target.value); if (v > 0) tset(t => t.h = v * K()); });
+  on('tRot', 'change', e => tset(t => t.rot = ((parseFloat(e.target.value) || 0) % 360 + 360) % 360));
+  on('tRotL', 'click', () => rotateSel(-15));
+  on('tRotR', 'click', () => rotateSel(15));
+  on('tFlipX', 'click', () => tset(t => t.flipX = !t.flipX));
+  on('tFlipY', 'click', () => tset(t => t.flipY = !t.flipY));
+  on('tBack', 'click', () => tset(t => { S.terrain = S.terrain.filter(x => x !== t); S.terrain.unshift(t); }));
+  on('tFront', 'click', () => tset(t => { S.terrain = S.terrain.filter(x => x !== t); S.terrain.push(t); }));
+  on('tDup', 'click', () => tset(t => { const c = clone(t); c.id = uid(); const o = 10 * K() / 10 * 2;
+    if (c.type === 'poly') c.pts = c.pts.map(p => [p[0] + o, p[1] + o]); else { c.x += o; c.y += o; }
+    S.terrain.push(c); ui.sel = [{k:'terrain', id:c.id}]; }));
+  on('tDel', 'click', deleteSel);
+  const dsetAll = fn => { pushUndo(); const ids = new Set(ds.map(s => s.id)); (stepObj(curKey()).draw).forEach(d => { if (ids.has(d.id)) fn(d); }); commit(); };
+  on('dColor', 'change', e => { $('drawColor').value = e.target.value; dsetAll(d => d.color = e.target.value); });
+  on('dW', 'change', e => { const v = parseFloat(e.target.value); if (v > 0) dsetAll(d => d.w = v); });
+  on('dDel', 'click', deleteSel);
+}
+
+function baseText(u) { return u.shape === 'oval' ? `${u.w}×${u.h}mm` : `${u.w}mm`; }
+function renderUnits() {
+  const sideSel = $('uSide'), prev = sideSel.value;
+  sideSel.innerHTML = S.structure.players.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join('');
+  if (prev !== '' && prev < S.structure.players.length) sideSel.value = prev;
+  const E = effPos(cur).pos;
+  let h = '';
+  const sides = S.structure.players.map((_, i) => i);
+  const orphan = S.units.filter(u => u.side >= S.structure.players.length);
+  sides.forEach(i => {
+    const us = S.units.filter(u => u.side === i); if (!us.length) return;
+    h += `<div class="ph" style="color:${playerColor(i)}">${esc(playerName(i))}</div>`;
+    us.forEach(u => h += unitRow(u, E));
+  });
+  if (orphan.length) { h += `<div class="ph">소속 없음</div>`; orphan.forEach(u => h += unitRow(u, E)); }
+  if (!S.units.length) h = '<p class="muted">아직 유닛이 없습니다. 위에서 추가하면 현재 단계의 맵에 자동으로 놓입니다.</p>';
+  $('uList').innerHTML = h;
+}
+function unitRow(u, E) {
+  const ms = S.models.filter(m => m.unitId === u.id), placed = ms.filter(m => E[m.id]).length, dead = ms.filter(m => E[m.id] && E[m.id].dead).length;
+  return `<div class="u"><span class="dot" style="background:${playerColor(u.side)}"></span>
+    <span class="nm" title="${esc(u.name)}">${esc(u.name)} <span class="muted">${baseText(u)} · ${placed}/${ms.length}${dead ? ' · 사상 ' + dead : ''}</span></span>
+    <button data-a="place" data-id="${u.id}" ${placed === ms.length ? 'disabled' : ''} title="맵에 없는 모델을 놓기">배치</button>
+    <button data-a="sel" data-id="${u.id}">선택</button><button data-a="edit" data-id="${u.id}">수정</button>
+    <button data-a="del" data-id="${u.id}" class="danger" title="유닛 삭제">✕</button></div>`;
+}
+function renderSide() { renderMemo(); renderSel(); renderUnits();
+  const gm = $('gameMemo'); if (document.activeElement !== gm) gm.value = S.meta.memo || ''; }
+function renderTools() {
+  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === ui.tool));
+  $('tGhost').classList.toggle('on', ui.ghost); $('tGrid').classList.toggle('on', ui.grid); $('tLock').classList.toggle('on', ui.lock);
+  $('bUndo').disabled = !undoStack.length; $('bRedo').disabled = !redoStack.length;
+  $('gameTitle').textContent = S.meta.title + (S.meta.date ? ' · ' + S.meta.date : '');
+  const hints = {
+    select: '클릭 선택 · Shift+클릭 추가 · 같은 모델 두 번 클릭 = 유닛 전체 · 빈 곳 드래그 = 범위 선택 · R 회전 · K 사상자 · Del 제거',
+    pan: '드래그해서 화면 이동 · 휠로 확대/축소',
+    rect: '드래그해서 사각형 지형 그리기 (나중에 크기·회전 수정 가능)',
+    ellipse: '드래그해서 원/타원 지형 그리기',
+    tri: '드래그해서 직각삼각형 지형 그리기 · 드래그를 시작한 모서리가 직각이 됩니다 (나중에 뒤집기·회전 가능)',
+    poly: '클릭으로 꼭짓점 추가 · 첫 점 클릭, 더블클릭 또는 Enter로 완료 · Esc 취소',
+    line: '드래그해서 선 그리기 (이 단계에만 표시)', arrow: '드래그해서 화살표 그리기 (이 단계에만 표시)',
+    measure: '드래그해서 거리 재기 (저장되지 않음)'};
+  $('hint').textContent = hints[ui.tool] || '';
+}
+function renderAll() { renderBoard(); renderTimeline(); renderSide(); renderTools(); }
+
+// ---------- 동작 ----------
+function go(i) { const n = stepList().length; i = Math.max(0, Math.min(n - 1, i)); if (i === cur) return;
+  cur = i; ui.sel = []; ui.measure = null; save(); renderAll(); }
+function selectUnit(unitId) { const E = effPos(cur).pos;
+  ui.sel = S.models.filter(m => m.unitId === unitId && E[m.id]).map(m => ({k:'model', id:m.id})); renderAll(); }
+function deleteSel() {
+  if (!ui.sel.length) return; pushUndo();
+  const ms = ui.sel.filter(s => s.k === 'model').map(s => s.id);
+  if (ms.length) { const pos = ownPos(); ms.forEach(id => delete pos[id]); }
+  const ts = new Set(ui.sel.filter(s => s.k === 'terrain').map(s => s.id));
+  if (ts.size) S.terrain = S.terrain.filter(t => !ts.has(t.id));
+  const ds = new Set(ui.sel.filter(s => s.k === 'draw').map(s => s.id));
+  if (ds.size) { const st = S.steps[curKey()]; if (st) st.draw = st.draw.filter(d => !ds.has(d.id)); }
+  ui.sel = []; commit();
+}
+function rotateSel(dd) {
+  if (!ui.sel.length) return; pushUndo();
+  const ms = ui.sel.filter(s => s.k === 'model');
+  if (ms.length) { const pos = ownPos(); ms.forEach(s => { const p = pos[s.id]; if (p) p.r = (((p.r || 0) + dd) % 360 + 360) % 360; }); }
+  ui.sel.filter(s => s.k === 'terrain').forEach(s => { const t = S.terrain.find(t => t.id === s.id); if (t && t.type !== 'poly') t.rot = (((t.rot || 0) + dd) % 360 + 360) % 360; });
+  commit();
+}
+function toggleDead() {
+  const ms = ui.sel.filter(s => s.k === 'model'); if (!ms.length) return; pushUndo();
+  const pos = ownPos(), all = ms.every(s => pos[s.id] && pos[s.id].dead);
+  ms.forEach(s => { if (pos[s.id]) pos[s.id].dead = !all; }); commit();
+}
+function placeUnit(u, pos) {
+  const ms = S.models.filter(m => m.unitId === u.id && !pos[m.id]); if (!ms.length) return;
+  const W = BW(), H = BH(), bw = u.w, bh = u.shape === 'oval' ? u.h : u.w, gap = Math.max(3, bw * 0.15);
+  const cols = Math.max(1, Math.min(ms.length, Math.ceil(Math.sqrt(ms.length * 2.5))));
+  const rows = Math.ceil(ms.length / cols), bwid = cols * (bw + gap), bhei = rows * (bh + gap);
+  const bands = u.side === 0 ? [0.82, 0.68, 0.55] : u.side === 1 ? [0.18, 0.32, 0.45] : [0.5, 0.35, 0.65];
+  const busy = (x0, y0) => Object.values(pos).some(p => p.x > x0 - 4 && p.x < x0 + bwid + 4 && p.y > y0 - 4 && p.y < y0 + bhei + 4);
+  let x0 = null, y0 = null;
+  outer: for (const b of bands) { const yy = Math.max(0, Math.min(H - bhei, H * b - bhei / 2));
+    for (let x = gap; x + bwid <= W; x += Math.max(10, bwid * 0.5)) if (!busy(x, yy)) { x0 = x; y0 = yy; break outer; } }
+  if (x0 === null) { x0 = Math.max(0, (W - bwid) / 2); y0 = Math.max(0, (H - bhei) / 2); }
+  ms.forEach((m, i) => { pos[m.id] = {x: x0 + (i % cols) * (bw + gap) + bw / 2 + gap / 2, y: y0 + Math.floor(i / cols) * (bh + gap) + bh / 2 + gap / 2, r:0, dead:false}; });
+}
+function removeModelsEverywhere(ids) {
+  const set = new Set(ids);
+  S.models = S.models.filter(m => !set.has(m.id));
+  Object.values(S.steps).forEach(st => { if (st.pos) ids.forEach(id => delete st.pos[id]); });
+}
+function finishPoly() {
+  if (ui.poly && ui.poly.length >= 3) {
+    pushUndo(); const t = {id:uid(), type:'poly', pts:ui.poly.map(p => [r2(p[0]), r2(p[1])]), label:'', fill:ui.terrainColor, op:0.35};
+    S.terrain.push(t); ui.sel = [{k:'terrain', id:t.id}];
+  }
+  ui.poly = null; ui.polyHover = null; commit();
+}
+
+// ---------- 포인터 ----------
+let drag = null, lastClick = {}, lastPolyClick = 0;
+function selSnapshot() {
+  const E = effPos(cur).pos, o = {m:{}, t:{}, d:{}};
+  for (const s of ui.sel) {
+    if (s.k === 'model' && E[s.id]) o.m[s.id] = {x:E[s.id].x, y:E[s.id].y};
+    if (s.k === 'terrain' && !ui.lock) { const t = S.terrain.find(t => t.id === s.id); if (t) o.t[s.id] = t.type === 'poly' ? {pts:clone(t.pts)} : {x:t.x, y:t.y}; }
+    if (s.k === 'draw') { const d = curDraws().find(d => d.id === s.id); if (d) o.d[s.id] = {...d}; }
+  }
+  return o;
+}
+svg.addEventListener('pointerdown', e => {
+  if (e.button === 2) return;
+  try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+  const p = toBoard(e);
+  if (e.button === 1 || ui.tool === 'pan' || spaceDown) { e.preventDefault(); drag = {mode:'pan', sx:e.clientX, sy:e.clientY, vb0:{...vb}, sc:svg.getScreenCTM().a}; return; }
+  if (ui.tool !== 'measure') ui.measure = null;
+  const tool = ui.tool;
+  if (tool === 'select') {
+    const t = e.target.closest && e.target.closest('[data-kind]');
+    if (t) {
+      const kind = t.dataset.kind, id = t.dataset.id;
+      if (kind === 'model') { const now = Date.now();
+        if (lastClick.id === id && now - lastClick.t < 380) { const m = S.models.find(m => m.id === id); lastClick = {}; if (m) selectUnit(m.unitId); return; }
+        lastClick = {id, t:now}; }
+      if (e.shiftKey) { if (isSel(kind, id)) ui.sel = ui.sel.filter(s => !(s.k === kind && s.id === id)); else ui.sel.push({k:kind, id}); renderBoard(); renderSel(); return; }
+      const wasSel = isSel(kind, id);
+      if (!wasSel) ui.sel = [{k:kind, id}];
+      drag = {mode:'move', start:p, moved:false, orig:selSnapshot(), clicked:{k:kind, id}, wasSel};
+      if (!wasSel) { renderBoard(); renderSel(); }
+    } else {
+      drag = {mode:'marquee', start:p, add:e.shiftKey ? ui.sel.slice() : []};
+      if (!e.shiftKey && ui.sel.length) { ui.sel = []; renderBoard(); renderSel(); }
+    }
+  } else if (tool === 'poly') {
+    const now = Date.now(), fb = fsBase();
+    if (ui.poly && ui.poly.length >= 3) {
+      const f = ui.poly[0];
+      if (now - lastPolyClick < 350 || Math.hypot(p.x - f[0], p.y - f[1]) < Math.max(fb * 0.8, pxToMm(10))) { finishPoly(); return; }
+    }
+    lastPolyClick = now;
+    ui.poly = ui.poly || []; ui.poly.push([p.x, p.y]); renderBoard();
+  } else {
+    drag = {mode:'create', tool, start:p};
+    ui.temp = null;
+  }
+});
+svg.addEventListener('pointermove', e => {
+  const p = toBoard(e);
+  if (!drag) { if (ui.poly) { ui.polyHover = p; renderBoard(); } return; }
+  if (drag.mode === 'pan') {
+    vb.x = drag.vb0.x - (e.clientX - drag.sx) / drag.sc; vb.y = drag.vb0.y - (e.clientY - drag.sy) / drag.sc;
+    svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); return;
+  }
+  if (drag.mode === 'move') {
+    const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+    if (!drag.moved) { if (Math.hypot(dx, dy) < pxToMm(4)) return;
+      pushUndo(); drag.moved = true; if (Object.keys(drag.orig.m).length) drag.pos = ownPos(); }
+    for (const id in drag.orig.m) { const q = drag.pos[id], o = drag.orig.m[id]; if (q) { q.x = r2(o.x + dx); q.y = r2(o.y + dy); } }
+    for (const id in drag.orig.t) { const t = S.terrain.find(t => t.id === id), o = drag.orig.t[id]; if (!t) continue;
+      if (t.type === 'poly') t.pts = o.pts.map(q => [r2(q[0] + dx), r2(q[1] + dy)]); else { t.x = r2(o.x + dx); t.y = r2(o.y + dy); } }
+    const draws = curDraws();
+    for (const id in drag.orig.d) { const d = draws.find(d => d.id === id), o = drag.orig.d[id]; if (d) { d.x1 = o.x1 + dx; d.y1 = o.y1 + dy; d.x2 = o.x2 + dx; d.y2 = o.y2 + dy; } }
+    renderBoard(); return;
+  }
+  if (drag.mode === 'marquee') { ui.marquee = {a:drag.start, b:p}; renderBoard(); return; }
+  if (drag.mode === 'create') {
+    if (drag.tool === 'measure') ui.measure = {a:drag.start, b:p}; else ui.temp = {tool:drag.tool, a:drag.start, b:p};
+    renderBoard();
+  }
+});
+function endDrag(e) {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.mode === 'move') {
+    if (d.moved) { save(); renderTimeline(); renderSide(); renderTools(); }
+    else if (d.wasSel && ui.sel.length > 1 && !e.shiftKey) { ui.sel = [d.clicked]; renderBoard(); renderSel(); }
+    return;
+  }
+  if (d.mode === 'marquee') {
+    const q = ui.marquee; ui.marquee = null;
+    if (q) { const x1 = Math.min(q.a.x, q.b.x), x2 = Math.max(q.a.x, q.b.x), y1 = Math.min(q.a.y, q.b.y), y2 = Math.max(q.a.y, q.b.y), E = effPos(cur).pos;
+      const got = S.models.filter(m => E[m.id] && E[m.id].x >= x1 && E[m.id].x <= x2 && E[m.id].y >= y1 && E[m.id].y <= y2).map(m => ({k:'model', id:m.id}));
+      ui.sel = d.add.concat(got.filter(g => !d.add.some(s => s.k === g.k && s.id === g.id))); }
+    renderBoard(); renderSel(); return;
+  }
+  if (d.mode === 'create') {
+    const T = ui.temp; ui.temp = null;
+    if (T) {
+      const x = Math.min(T.a.x, T.b.x), y = Math.min(T.a.y, T.b.y), w = Math.abs(T.a.x - T.b.x), h = Math.abs(T.a.y - T.b.y);
+      if ((T.tool === 'rect' || T.tool === 'ellipse' || T.tool === 'tri') && w > 3 && h > 3) {
+        pushUndo(); const t = {id:uid(), type:T.tool, x:r2(x + w/2), y:r2(y + h/2), w:r2(w), h:r2(h), rot:0, label:'', fill:ui.terrainColor, op:0.35};
+        if (T.tool === 'tri') Object.assign(t, triFlip(T));
+        S.terrain.push(t); ui.sel = [{k:'terrain', id:t.id}]; commit(); return;
+      }
+      if ((T.tool === 'line' || T.tool === 'arrow') && Math.hypot(w, h) > 3) {
+        pushUndo(); const dd = {id:uid(), type:T.tool, x1:r2(T.a.x), y1:r2(T.a.y), x2:r2(T.b.x), y2:r2(T.b.y), color:$('drawColor').value, w:r2(strokeW())};
+        stepObj(curKey()).draw.push(dd); commit(); return;
+      }
+    }
+    renderBoard();
+  }
+}
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+svg.addEventListener('wheel', e => { e.preventDefault(); const p = toBoard(e); zoomAt(p.x, p.y, e.deltaY > 0 ? 1.12 : 1 / 1.12); }, {passive:false});
+svg.addEventListener('contextmenu', e => e.preventDefault());
+
+// ---------- 키보드 ----------
+document.addEventListener('keydown', e => {
+  if ($('dlg').open) return;
+  const tag = e.target.tagName || '';
+  if (/INPUT|TEXTAREA|SELECT/.test(tag) || e.target.isContentEditable) return;
+  const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+  if (mod && key === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && key === 'y') { e.preventDefault(); redo(); return; }
+  if (mod) return;
+  if (e.key === ' ') { spaceDown = true; e.preventDefault(); return; }
+  if (e.key === 'Escape') { ui.poly = null; ui.polyHover = null; ui.sel = []; ui.measure = null; renderBoard(); renderSel(); return; }
+  if (e.key === 'Enter' && ui.poly) { finishPoly(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSel(); return; }
+  if (key === 'r') { rotateSel(e.shiftKey ? -15 : 15); return; }
+  if (key === 'k') { toggleDead(); return; }
+  if (e.key === ',') { go(cur - 1); return; }
+  if (e.key === '.') { go(cur + 1); return; }
+  if (key === 'v') setTool('select');
+  if (key === 'h') setTool('pan');
+});
+document.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; });
+
+// ---------- 버튼 ----------
+function setTool(t) { ui.tool = t; ui.poly = null; ui.polyHover = null; ui.temp = null; if (t !== 'measure') ui.measure = null; renderBoard(); renderTools(); }
+document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+$('tGhost').onclick = () => { ui.ghost = !ui.ghost; renderBoard(); renderTools(); };
+$('tGrid').onclick = () => { ui.grid = !ui.grid; renderBoard(); renderTools(); };
+$('tLock').onclick = () => { ui.lock = !ui.lock; ui.sel = ui.sel.filter(s => s.k !== 'terrain'); renderBoard(); renderSel(); renderTools(); };
+$('bFit').onclick = () => { fit(); renderBoard(); };
+$('bZoomIn').onclick = () => zoomAt(vb.x + vb.w/2, vb.y + vb.h/2, 1/1.25);
+$('bZoomOut').onclick = () => zoomAt(vb.x + vb.w/2, vb.y + vb.h/2, 1.25);
+$('bUndo').onclick = undo; $('bRedo').onclick = redo;
+$('bPrev').onclick = () => go(cur - 1); $('bNext').onclick = () => go(cur + 1);
+$('chips').onclick = e => { const c = e.target.closest('.chip'); if (c) go(+c.dataset.i); };
+// 워해머 40K 11판 표준 지형 영역 (인치, 가로×세로)
+const SET_40K_11 = [
+  {n:'대형', type:'rect', w:7,  h:11.5, c:4, fill:'#8a8a80'},
+  {n:'삼각', type:'tri',  w:8,  h:11.5, c:2, fill:'#8a8a80'},
+  {n:'중형', type:'rect', w:6,  h:4,    c:4, fill:'#8a8a80'},
+  {n:'긴 라인', type:'rect', w:10, h:2.5, c:2, fill:'#a0703c'},
+  {n:'짧은 라인', type:'rect', w:6, h:2,  c:4, fill:'#a0703c'},
+];
+$('b40kSet').onclick = () => {
+  if (S.terrain.some(t => t.set === '40k11') && !confirm('이미 40K 지형 세트가 있습니다. 한 세트를 더 꺼낼까요?')) return;
+  pushUndo();
+  const IN = 25.4, gap = 1 * IN, W = Math.max(BW(), 60 * IN);
+  // 맵 아래쪽 바깥에, 맵 너비 안에서 줄을 바꿔가며 늘어놓기
+  let x = 0, y = BH() + 3 * IN, rowH = 0; const ids = [];
+  for (const p of SET_40K_11) for (let i = 1; i <= p.c; i++) {
+    const w = p.w * IN, h = p.h * IN;
+    if (x > 0 && x + w > W) { x = 0; y += rowH + gap; rowH = 0; }
+    const t = {id:uid(), set:'40k11', type:p.type, x:r2(x + w/2), y:r2(y + h/2), w:r2(w), h:r2(h), rot:0, label:`${p.n} ${i}`, fill:p.fill, op:0.35};
+    S.terrain.push(t); ids.push(t.id);
+    x += w + gap; rowH = Math.max(rowH, h);
+  }
+  ui.sel = []; ui.lock = false; setTool('select');
+  // 꺼낸 세트까지 보이도록 화면 맞춤
+  const m = 15, totalH = y + rowH + 3 * IN;   // 아래 안내문에 가리지 않게 여유
+  const cw = svg.clientWidth || 800, ch = svg.clientHeight || 600, w0 = BW() + 2*m + 40, h0 = totalH + 2*m + 40;
+  const sc = Math.max(w0 / cw, h0 / ch);
+  vb = {w:cw*sc, h:ch*sc}; vb.x = BW()/2 - vb.w/2; vb.y = totalH/2 - vb.h/2;
+  commit();
+};
+$('bObj').onclick = () => {
+  pushUndo(); const W = BW(), H = BH();
+  const n = S.terrain.filter(t => t.obj).length + 1;
+  const t = {id:uid(), type:'ellipse', obj:true, x:r2(Math.max(20, Math.min(W - 20, vb.x + vb.w/2))), y:r2(Math.max(20, Math.min(H - 20, vb.y + vb.h/2))), w:40, h:40, rot:0, label:String(n), fill:'#d4a017', op:0.85};
+  S.terrain.push(t); ui.sel = [{k:'terrain', id:t.id}]; setTool('select'); commit();
+};
+$('gameMemo').oninput = e => { S.meta.memo = e.target.value; save(); };
+
+// 유닛 폼
+$('uBase').innerHTML = `<option value="">베이스 규격 선택…</option>` + BASES.map(b => `<option value="${b.join(':')}">${b[0] === 'oval' ? `타원 ${b[1]}×${b[2]}mm` : `원형 ${b[1]}mm`}</option>`).join('');
+function syncShape() { $('uHWrap').style.display = $('uShape').value === 'oval' ? '' : 'none'; }
+$('uBase').onchange = e => { if (!e.target.value) return; const [s, w, h] = e.target.value.split(':');
+  $('uShape').value = s; $('uW').value = w; $('uH').value = h || w; syncShape(); };
+$('uShape').onchange = syncShape;
+function resetUnitForm() { ui.editUnit = null; $('uAdd').textContent = '유닛 추가'; $('uCancel').hidden = true; $('uName').value = ''; $('uN').disabled = false; }
+$('uCancel').onclick = resetUnitForm;
+$('uAdd').onclick = () => {
+  const name = $('uName').value.trim(); if (!name) { $('uName').focus(); return; }
+  const side = parseInt($('uSide').value) || 0, shape = $('uShape').value;
+  const w = Math.max(5, parseFloat($('uW').value) || 32), h = shape === 'oval' ? Math.max(5, parseFloat($('uH').value) || w) : w;
+  const n = Math.max(1, Math.min(300, parseInt($('uN').value) || 1));
+  pushUndo();
+  if (ui.editUnit) {
+    const u = S.units.find(u => u.id === ui.editUnit);
+    if (u) {
+      Object.assign(u, {name, side, shape, w, h});
+      const ms = S.models.filter(m => m.unitId === u.id).sort((a, b) => a.n - b.n);
+      if (n > ms.length) { let next = ms.length ? ms[ms.length - 1].n + 1 : 1; for (let i = ms.length; i < n; i++) S.models.push({id:uid(), unitId:u.id, n:next++}); placeUnit(u, ownPos()); }
+      else if (n < ms.length) removeModelsEverywhere(ms.slice(n).map(m => m.id));
+    }
+    resetUnitForm();
+  } else {
+    const u = {id:uid(), name, side, shape, w, h};
+    S.units.push(u);
+    for (let i = 1; i <= n; i++) S.models.push({id:uid(), unitId:u.id, n:i});
+    placeUnit(u, ownPos());
+    $('uName').value = '';
+  }
+  commit();
+};
+$('uName').addEventListener('keydown', e => { if (e.key === 'Enter') $('uAdd').click(); });
+$('uList').onclick = e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const u = S.units.find(u => u.id === b.dataset.id); if (!u) return;
+  const a = b.dataset.a;
+  if (a === 'place') { pushUndo(); placeUnit(u, ownPos()); selectUnit(u.id); commit(); }
+  if (a === 'sel') selectUnit(u.id);
+  if (a === 'edit') {
+    ui.editUnit = u.id; $('uName').value = u.name; $('uSide').value = u.side; $('uShape').value = u.shape; $('uW').value = u.w; $('uH').value = u.h;
+    $('uN').value = S.models.filter(m => m.unitId === u.id).length; $('uBase').value = ''; syncShape();
+    $('uAdd').textContent = '수정 저장'; $('uCancel').hidden = false; $('uName').focus();
+  }
+  if (a === 'del') {
+    if (!confirm(`“${u.name}” 유닛과 모든 단계의 위치 기록을 삭제할까요?`)) return;
+    pushUndo(); removeModelsEverywhere(S.models.filter(m => m.unitId === u.id).map(m => m.id));
+    S.units = S.units.filter(x => x !== u); ui.sel = []; if (ui.editUnit === u.id) resetUnitForm(); commit();
+  }
+};
+
+// ---------- 설정 대화상자 ----------
+let dlgPlayers = [];
+$('sPreset').innerHTML = `<option value="">— 고르면 아래 칸이 채워집니다 —</option>` + Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${p.label}</option>`).join('');
+function drawPlayers() {
+  $('sPlayers').innerHTML = dlgPlayers.map((p, i) => `<div class="row"><input type="text" data-i="${i}" class="pn" value="${esc(p.name)}" style="flex:1"><input type="color" data-i="${i}" class="pc" value="${p.color}">${dlgPlayers.length > 1 ? `<button type="button" data-i="${i}" class="px">✕</button>` : ''}</div>`).join('');
+  $('sPlayers').querySelectorAll('.pn').forEach(el => el.oninput = () => dlgPlayers[el.dataset.i].name = el.value);
+  $('sPlayers').querySelectorAll('.pc').forEach(el => el.oninput = () => dlgPlayers[el.dataset.i].color = el.value);
+  $('sPlayers').querySelectorAll('.px').forEach(el => el.onclick = () => { dlgPlayers.splice(+el.dataset.i, 1); drawPlayers(); });
+}
+function openSettings() {
+  $('sTitle').value = S.meta.title; $('sDate').value = S.meta.date || '';
+  $('sW').value = S.board.w; $('sH').value = S.board.h; $('sUnit').value = S.board.unit;
+  $('sPreset').value = ''; $('sPre').value = S.structure.pre.join(', '); $('sRounds').value = S.structure.rounds; $('sPhases').value = S.structure.phases.join(', ');
+  dlgPlayers = clone(S.structure.players); drawPlayers();
+  $('dlg').showModal();
+}
+$('sPreset').onchange = e => { const p = PRESETS[e.target.value]; if (!p) return;
+  $('sPre').value = p.pre.join(', '); $('sRounds').value = p.rounds; $('sPhases').value = p.phases.join(', ');
+  $('sW').value = p.board[0]; $('sH').value = p.board[1]; $('sUnit').value = p.board[2]; };
+$('sAddPlayer').onclick = () => { const cs = ['#2563eb','#dc2626','#16a34a','#9333ea','#ea580c','#0891b2']; dlgPlayers.push({name:'플레이어 ' + (dlgPlayers.length + 1), color:cs[dlgPlayers.length % cs.length]}); drawPlayers(); };
+$('sCancel').onclick = () => $('dlg').close();
+$('sOk').onclick = () => {
+  const split = v => v.split(',').map(s => s.trim()).filter(Boolean);
+  const phases = split($('sPhases').value); if (!phases.length) { alert('페이즈를 하나 이상 입력하세요.'); return; }
+  const w = parseFloat($('sW').value), h = parseFloat($('sH').value); if (!(w > 0 && h > 0)) { alert('맵 크기를 확인하세요.'); return; }
+  const boardChanged = w !== S.board.w || h !== S.board.h || $('sUnit').value !== S.board.unit;
+  pushUndo();
+  S.meta.title = $('sTitle').value.trim() || '새 게임'; S.meta.date = $('sDate').value;
+  S.board = {w, h, unit:$('sUnit').value};
+  S.structure = {pre:split($('sPre').value), rounds:Math.max(1, Math.min(30, parseInt($('sRounds').value) || 1)), phases,
+    players:dlgPlayers.map((p, i) => ({name:p.name.trim() || ('플레이어 ' + (i + 1)), color:p.color}))};
+  $('dlg').close(); if (boardChanged) fit(); commit();
+};
+$('bSettings').onclick = openSettings;
+$('bNew').onclick = () => {
+  if (!confirm('현재 내용을 지우고 새 게임을 시작할까요?\n(필요하면 먼저 “내보내기”로 저장하세요. 실행취소로 되돌릴 수도 있습니다.)')) return;
+  pushUndo(); S = newState(); cur = 0; ui.sel = []; resetUnitForm(); fit(); commit(); openSettings();
+};
+
+// ---------- 파일 ----------
+const safeName = s => String(s || 'battle').replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '') || 'battle';
+function download(name, blob) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+$('bExport').onclick = () => download(`${safeName(S.meta.title)}_${S.meta.date || today()}.json`, new Blob([JSON.stringify(S, null, 2)], {type:'application/json'}));
+$('bImport').onclick = () => $('fileIn').click();
+$('fileIn').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { try { const d = normalize(JSON.parse(rd.result)); pushUndo(); S = d; cur = 0; ui.sel = []; resetUnitForm(); fit(); commit(); }
+    catch (err) { alert('불러오기 실패: ' + err.message); } };
+  rd.readAsText(f, 'utf-8'); e.target.value = '';
+};
+$('bPng').onclick = () => {
+  const keepSel = ui.sel, keepVb = {...vb}, keepM = ui.measure;
+  ui.sel = []; ui.measure = null;
+  const W = BW(), H = BH(), m = Math.max(W, H) * 0.04 + 15, top = m * 2.2;
+  vb = {x:-m, y:-top, w:W + 2*m, h:H + m + top};
+  renderBoard();
+  const c = svg.cloneNode(true);
+  const scale = 2400 / vb.w, pw = Math.round(vb.w * scale), ph = Math.round(vb.h * scale);
+  c.setAttribute('width', pw); c.setAttribute('height', ph); c.removeAttribute('style'); c.removeAttribute('id');
+  c.setAttribute('font-family', 'system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif');
+  const step = stepList()[cur];
+  c.insertAdjacentHTML('afterbegin', `<rect x="${vb.x}" y="${vb.y}" width="${vb.w}" height="${vb.h}" fill="#ffffff"/>`);
+  c.insertAdjacentHTML('beforeend', `<text x="0" y="${-top * 0.5}" font-size="${fsBase() * 2}" font-weight="600" fill="#111">${esc(S.meta.title)} — ${esc(step.label)}</text>`);
+  vb = keepVb; ui.sel = keepSel; ui.measure = keepM; renderBoard();
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(c)], {type:'image/svg+xml;charset=utf-8'}));
+  const img = new Image();
+  img.onload = () => { const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph; const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, pw, ph); g.drawImage(img, 0, 0, pw, ph); URL.revokeObjectURL(url);
+    cv.toBlob(b => download(`${safeName(S.meta.title)}_${String(cur + 1).padStart(2, '0')}_${safeName(step.label)}.png`, b), 'image/png'); };
+  img.onerror = () => { URL.revokeObjectURL(url); alert('PNG 변환에 실패했습니다.'); };
+  img.src = url;
+};
+
+// ---------- 시작 ----------
+window.addEventListener('resize', () => { fitAspect(); renderBoard(); });
+syncShape();
+fit();
+renderAll();
+})();
+</script>
+</body>
+</html>
