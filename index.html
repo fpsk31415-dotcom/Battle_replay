@@ -89,6 +89,10 @@ details summary{cursor:pointer;font-weight:600}
   <button id="tGrid">격자</button>
   <button id="tLock" title="지형을 클릭/이동하지 않게 고정">지형 잠금</button>
   <span class="sep"></span>
+  <select id="bgSel" title="배경 맵 (maps/maps.js 목록)" style="max-width:190px"></select>
+  <button id="bgShow" title="배경 맵 보이기/숨기기">배경</button>
+  <input type="range" id="bgOp" min="0.1" max="1" step="0.05" title="배경 투명도" style="width:80px">
+  <span class="sep"></span>
   <button id="bZoomOut">−</button>
   <button id="bFit">맞춤</button>
   <button id="bZoomIn">+</button>
@@ -119,6 +123,8 @@ details summary{cursor:pointer;font-weight:600}
       <p><b>배치 이어받기</b>: 아직 손대지 않은 단계는 직전 단계의 배치를 그대로 보여줍니다. 그 단계에서 모델을 처음 움직이는 순간 배치가 복사되어 그 단계만의 기록이 됩니다.</p>
       <p><b>선택</b>: 클릭 · Shift+클릭 추가 · 같은 모델 빠르게 두 번 클릭 = 유닛 전체 · 빈 곳 드래그 = 범위 선택</p>
       <p><b>단축키</b>: R / Shift+R 회전 · K 사상자 표시 · Delete 테이블에서 제거 · , . 이전/다음 단계 · Ctrl+Z 실행취소 · Esc 취소 · Space+드래그 화면 이동 · 휠 확대/축소</p>
+      <p><b>배경 맵</b>: 도구 막대의 목록에서 고르면 맵 크기가 그 배치도에 맞춰집니다. 목록은 <code>maps/maps.js</code>에서 관리하고, 이미지는 <code>maps/40k/</code> 같은 폴더에 둡니다. “배경” 버튼으로 숨기기, 옆 슬라이더로 투명도 조절. 배경 위의 격자가 겹쳐 보이면 “격자”를 끄세요.</p>
+      <p><b>이동 거리</b>: 모델을 끄는 동안 직전 단계 위치에서 몇 인치 움직였는지 표시됩니다(베이스 중심 간 직선거리). “이전 위치”를 켜면 움직인 모델의 경로 위에 거리가 계속 보입니다.</p>
       <p><b>저장</b>: 브라우저에 자동 저장되지만, 보관은 반드시 “내보내기(JSON)”로 하세요. 그 파일을 “불러오기”로 다시 열 수 있습니다.</p>
     </div></details></div>
   </aside>
@@ -139,6 +145,8 @@ details summary{cursor:pointer;font-weight:600}
   <div class="row" style="justify-content:flex-end"><button type="button" id="sCancel">취소</button><button type="button" id="sOk">저장</button></div>
 </dialog>
 
+<!-- 배경 맵 목록: 파일이 없어도 페이지는 정상 동작합니다 -->
+<script src="maps/maps.js"></script>
 <script>
 (() => {
 'use strict';
@@ -165,8 +173,11 @@ function newState() {
   return {version:1, meta:{title:'새 게임', date:today(), memo:''}, board:{w:60, h:44, unit:'in'},
     structure:{pre:['배치'], rounds:5, phases:['커맨드','이동','사격','돌격','전투'],
       players:[{name:'플레이어 1', color:'#2563eb'},{name:'플레이어 2', color:'#dc2626'}]},
-    units:[], models:[], terrain:[], steps:{}};
+    units:[], models:[], terrain:[], steps:{}, bg:{mapId:'', op:0.7, show:true}};
 }
+// maps/maps.js 가 정의한 배경 맵 목록
+const MAPS = Array.isArray(window.BATTLE_MAPS) ? window.BATTLE_MAPS.filter(m => m && m.id && m.file) : [];
+const findMap = id => MAPS.find(m => m.id === id);
 function normalize(d) {
   if (!d || typeof d !== 'object') throw new Error('올바른 복기 파일이 아닙니다.');
   const b = newState();
@@ -180,6 +191,7 @@ function normalize(d) {
   st.rounds = Math.max(1, Math.min(30, parseInt(st.rounds) || 1));
   if (!(s.board.w > 0) || !(s.board.h > 0)) s.board = b.board;
   if (s.board.unit !== 'cm') s.board.unit = 'in';
+  s.bg = {...b.bg, ...(d.bg || {})};
   return s;
 }
 
@@ -284,12 +296,19 @@ function arrowSvg(d, col, sw) {
 // 직각삼각형: 직각이 왼쪽 아래 (뒤집기로 다른 모서리로)
 const triPts = (w, h) => `${-w/2},${-h/2} ${-w/2},${h/2} ${w/2},${h/2}`;
 const triFlip = T => ({flipX: T.a.x > T.b.x, flipY: T.a.y < T.b.y});   // 드래그 시작점이 직각 모서리
+function distLabel(x, y, mm, col, scale) {
+  const fs = fsBase() * scale;
+  return `<text x="${x}" y="${y}" font-size="${fs}" text-anchor="middle" dominant-baseline="central" font-weight="600" fill="${col}" stroke="#fff" stroke-width="${fs * 0.28}" paint-order="stroke">${fmtLen(mm)}</text>`;
+}
 function polyCenter(pts) { let x = 0, y = 0; pts.forEach(p => { x += p[0]; y += p[1]; }); return [x/pts.length, y/pts.length]; }
 
 function renderBoard() {
   svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   const W = BW(), H = BH(), k = K(), fb = fsBase(), cm = S.board.unit === 'cm';
   let h = `<rect x="0" y="0" width="${W}" height="${H}" fill="#fbfbf8" stroke="#555" stroke-width="1.2"/>`;
+  const bgMap = S.bg.show && findMap(S.bg.mapId);
+  if (bgMap) h += `<image data-bg="1" href="${esc(bgMap.file)}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="none" opacity="${S.bg.op}" pointer-events="none"/>` +
+    `<rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="#555" stroke-width="1.2" pointer-events="none"/>`;
   // 격자
   const minorU = cm ? 2 : 1, ratio = cm ? 5 : 6, minor = minorU * k;
   if (ui.grid) {
@@ -337,6 +356,7 @@ function renderBoard() {
 
   const UM = unitMap();
   const E = effPos(cur).pos;
+  let ghostLabels = '';
   // 이전 위치(고스트)
   if (ui.ghost && cur > 0) {
     const prev = effPos(cur - 1).pos;
@@ -347,6 +367,9 @@ function renderBoard() {
       const col = playerColor(u.side);
       h += `<g pointer-events="none" opacity=".7"><g transform="translate(${a.x} ${a.y}) rotate(${a.r || 0})">${baseShape(u, `fill="none" stroke="${col}" stroke-width="0.8" stroke-dasharray="3 2"`)}</g>` +
         (b ? `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="0.8" stroke-dasharray="3 2"/>` : '') + `</g>`;
+      // 모델이 움직였으면 경로 중간에 이동 거리 표시 (드래그 중인 모델은 아래에서 따로 표시)
+      if (b && !(ui.moveRefs && ui.moveRefs[id])) { const dist = Math.hypot(b.x - a.x, b.y - a.y);
+        if (dist >= 0.5) ghostLabels += distLabel((a.x + b.x) / 2, (a.y + b.y) / 2, dist, col, 0.85); }
     }
   }
   // 모델
@@ -371,7 +394,19 @@ function renderBoard() {
       (d.type === 'arrow' ? arrowSvg(d, d.color, sw) : `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${d.color}" stroke-width="${sw}" stroke-linecap="round"/>`) + `</g>`;
   }
   // 오버레이
-  h += `<g pointer-events="none">`;
+  h += `<g pointer-events="none">` + ghostLabels;
+  // 드래그 중: 기준 위치(직전 단계, 없으면 드래그 시작점)에서 얼마나 움직였는지
+  if (ui.moveRefs) {
+    const ids = Object.keys(ui.moveRefs), many = ids.length > 12;
+    for (const id of ids) {
+      if (many && id !== ui.moveMain) continue;
+      const a = ui.moveRefs[id], b = E[id], m = S.models.find(m => m.id === id); if (!b || !m) continue;
+      const u = UM[m.unitId]; if (!u) continue;
+      const dist = Math.hypot(b.x - a.x, b.y - a.y), bh = u.shape === 'oval' ? u.h : u.w;
+      h += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#111" stroke-opacity=".5" stroke-width="0.8" stroke-dasharray="3 2"/>` +
+        distLabel(b.x, b.y - Math.max(u.w, bh) / 2 - fb * 0.9, dist, '#111', 1.1);
+    }
+  }
   const T = ui.temp;
   if (T) {
     const x = Math.min(T.a.x, T.b.x), y = Math.min(T.a.y, T.b.y), w = Math.abs(T.a.x - T.b.x), hh = Math.abs(T.a.y - T.b.y);
@@ -538,6 +573,7 @@ function renderTools() {
   $('tGhost').classList.toggle('on', ui.ghost); $('tGrid').classList.toggle('on', ui.grid); $('tLock').classList.toggle('on', ui.lock);
   $('bUndo').disabled = !undoStack.length; $('bRedo').disabled = !redoStack.length;
   $('gameTitle').textContent = S.meta.title + (S.meta.date ? ' · ' + S.meta.date : '');
+  renderBgControls();
   const hints = {
     select: '클릭 선택 · Shift+클릭 추가 · 같은 모델 두 번 클릭 = 유닛 전체 · 빈 곳 드래그 = 범위 선택 · R 회전 · K 사상자 · Del 제거',
     pan: '드래그해서 화면 이동 · 휠로 확대/축소',
@@ -661,7 +697,14 @@ svg.addEventListener('pointermove', e => {
   if (drag.mode === 'move') {
     const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
     if (!drag.moved) { if (Math.hypot(dx, dy) < pxToMm(4)) return;
-      pushUndo(); drag.moved = true; if (Object.keys(drag.orig.m).length) drag.pos = ownPos(); }
+      pushUndo(); drag.moved = true;
+      if (Object.keys(drag.orig.m).length) {
+        drag.pos = ownPos();
+        const prev = cur > 0 ? effPos(cur - 1).pos : {};
+        ui.moveRefs = {};
+        for (const id in drag.orig.m) { const q = prev[id] || drag.orig.m[id]; ui.moveRefs[id] = {x:q.x, y:q.y}; }
+        ui.moveMain = drag.clicked.k === 'model' ? drag.clicked.id : Object.keys(drag.orig.m)[0];
+      } }
     for (const id in drag.orig.m) { const q = drag.pos[id], o = drag.orig.m[id]; if (q) { q.x = r2(o.x + dx); q.y = r2(o.y + dy); } }
     for (const id in drag.orig.t) { const t = S.terrain.find(t => t.id === id), o = drag.orig.t[id]; if (!t) continue;
       if (t.type === 'poly') t.pts = o.pts.map(q => [r2(q[0] + dx), r2(q[1] + dy)]); else { t.x = r2(o.x + dx); t.y = r2(o.y + dy); } }
@@ -679,6 +722,7 @@ function endDrag(e) {
   if (!drag) return;
   const d = drag; drag = null;
   if (d.mode === 'move') {
+    if (ui.moveRefs) { ui.moveRefs = null; renderBoard(); }
     if (d.moved) { save(); renderTimeline(); renderSide(); renderTools(); }
     else if (d.wasSel && ui.sel.length > 1 && !e.shiftKey) { ui.sel = [d.clicked]; renderBoard(); renderSel(); }
     return;
@@ -746,6 +790,31 @@ $('bZoomOut').onclick = () => zoomAt(vb.x + vb.w/2, vb.y + vb.h/2, 1.25);
 $('bUndo').onclick = undo; $('bRedo').onclick = redo;
 $('bPrev').onclick = () => go(cur - 1); $('bNext').onclick = () => go(cur + 1);
 $('chips').onclick = e => { const c = e.target.closest('.chip'); if (c) go(+c.dataset.i); };
+// ---------- 배경 맵 ----------
+function renderBgControls() {
+  const sel = $('bgSel'), id = S.bg.mapId;
+  const groups = {};
+  MAPS.forEach(m => (groups[m.group || '기타'] = groups[m.group || '기타'] || []).push(m));
+  let h = `<option value="">배경 맵 없음${MAPS.length ? '' : ' (maps.js 없음)'}</option>`;
+  for (const g in groups) h += `<optgroup label="${esc(g)}">` + groups[g].map(m => `<option value="${esc(m.id)}">${esc(m.name || m.id)}</option>`).join('') + `</optgroup>`;
+  if (id && !findMap(id)) h += `<option value="${esc(id)}">⚠ 목록에 없음: ${esc(id)}</option>`;
+  sel.innerHTML = h; sel.value = id || '';
+  $('bgOp').value = S.bg.op; $('bgShow').classList.toggle('on', !!(S.bg.show && id));
+  $('bgOp').disabled = $('bgShow').disabled = !id;
+}
+$('bgSel').onchange = e => {
+  const m = findMap(e.target.value);
+  pushUndo(); S.bg.mapId = e.target.value; S.bg.show = true;
+  if (m) {
+    const w = +m.w || S.board.w, h = +m.h || S.board.h, unit = m.unit === 'cm' ? 'cm' : (m.unit ? 'in' : S.board.unit);
+    if (w !== S.board.w || h !== S.board.h || unit !== S.board.unit) { S.board = {w, h, unit}; fit(); }
+  }
+  commit();
+};
+$('bgShow').onclick = () => { S.bg.show = !S.bg.show; save(); renderBoard(); renderBgControls(); };
+$('bgOp').oninput = e => { S.bg.op = parseFloat(e.target.value); const im = svg.querySelector('[data-bg]'); if (im) im.setAttribute('opacity', S.bg.op); };
+$('bgOp').onchange = () => save();
+
 // 워해머 40K 11판 표준 지형 영역 (인치, 가로×세로)
 const SET_40K_11 = [
   {n:'대형', type:'rect', w:7,  h:11.5, c:4, fill:'#8a8a80'},
@@ -902,6 +971,14 @@ $('bPng').onclick = () => {
   c.insertAdjacentHTML('afterbegin', `<rect x="${vb.x}" y="${vb.y}" width="${vb.w}" height="${vb.h}" fill="#ffffff"/>`);
   c.insertAdjacentHTML('beforeend', `<text x="0" y="${-top * 0.5}" font-size="${fsBase() * 2}" font-weight="600" fill="#111">${esc(S.meta.title)} — ${esc(step.label)}</text>`);
   vb = keepVb; ui.sel = keepSel; ui.measure = keepM; renderBoard();
+  // 배경 이미지는 데이터로 넣어야 PNG에 들어감. 로컬(file://)에서는 브라우저가 막으므로 배경 없이 저장
+  const bgEl = c.querySelector('[data-bg]');
+  const embed = !bgEl ? Promise.resolve() : fetch(bgEl.getAttribute('href'))
+    .then(r => { if (!r.ok) throw 0; return r.blob(); })
+    .then(b => new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(b); }))
+    .then(data => bgEl.setAttribute('href', data))
+    .catch(() => bgEl.remove());
+  embed.then(() => {
   const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(c)], {type:'image/svg+xml;charset=utf-8'}));
   const img = new Image();
   img.onload = () => { const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph; const g = cv.getContext('2d');
@@ -909,6 +986,7 @@ $('bPng').onclick = () => {
     cv.toBlob(b => download(`${safeName(S.meta.title)}_${String(cur + 1).padStart(2, '0')}_${safeName(step.label)}.png`, b), 'image/png'); };
   img.onerror = () => { URL.revokeObjectURL(url); alert('PNG 변환에 실패했습니다.'); };
   img.src = url;
+  });
 };
 
 // ---------- 시작 ----------
