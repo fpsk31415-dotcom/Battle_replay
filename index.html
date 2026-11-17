@@ -49,10 +49,17 @@ textarea{width:100%;resize:vertical}
 dialog{border:1px solid var(--line);border-radius:8px;padding:14px;max-width:540px;width:95vw}
 dialog h2{margin:0 0 10px;font-size:15px}
 dialog .row>label:first-child{width:95px}
+#rTable th,#rTable td{padding:3px 5px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+#rTable th{position:sticky;top:0;background:#f7f7f4;font-weight:600}
+#rTable input[type=text]{width:100%;min-width:110px}
+#rTable input[type=number]{width:52px}
+#rTable tr.off td{opacity:.4}
+#rTable .wg{color:var(--muted);font-size:11px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #hint{position:absolute;left:8px;bottom:8px;right:8px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:5px;padding:3px 8px;font-size:12px;color:var(--muted);pointer-events:none;width:fit-content;max-width:calc(100% - 16px)}
 details summary{cursor:pointer;font-weight:600}
 #help p{margin:4px 0}
-@media (max-width:820px){main{flex-direction:column}#side{width:auto;height:42vh;border-left:0;border-top:1px solid var(--line)}}
+#copyright{flex:none;padding:3px 10px;font-size:11px;color:var(--muted);background:var(--panel);border-top:1px solid var(--line);text-align:center;line-height:1.4}
+@media (max-width:820px){#copyright{font-size:10px;padding:2px 8px}#copyright .en{display:none}main{flex-direction:column}#side{width:auto;height:42vh;border-left:0;border-top:1px solid var(--line)}}
 </style>
 </head>
 <body>
@@ -109,7 +116,7 @@ details summary{cursor:pointer;font-weight:600}
     <div class="sec" id="secMemo"></div>
     <div class="sec" id="secSel"></div>
     <div class="sec" id="secUnits">
-      <h3>유닛 추가</h3>
+      <div class="row" style="justify-content:space-between;margin:0 0 6px"><h3 style="margin:0">유닛 추가</h3><button id="bRoster" title="워해머 공식 앱에서 내보낸 로스터 텍스트로 유닛 만들기">로스터 가져오기</button></div>
       <div class="row"><input type="text" id="uName" placeholder="유닛 이름" style="flex:1;min-width:120px"><select id="uSide"></select></div>
       <div class="row"><select id="uBase"></select><select id="uShape"><option value="circle">원형</option><option value="oval">타원형</option></select></div>
       <div class="row"><label>베이스(mm)</label><input type="number" id="uW" min="5" step="1" value="32"><span id="uHWrap">× <input type="number" id="uH" min="5" step="1" value="32"></span></div>
@@ -123,12 +130,17 @@ details summary{cursor:pointer;font-weight:600}
       <p><b>배치 이어받기</b>: 아직 손대지 않은 단계는 직전 단계의 배치를 그대로 보여줍니다. 그 단계에서 모델을 처음 움직이는 순간 배치가 복사되어 그 단계만의 기록이 됩니다.</p>
       <p><b>선택</b>: 클릭 · Shift+클릭 추가 · 같은 모델 빠르게 두 번 클릭 = 유닛 전체 · 빈 곳 드래그 = 범위 선택</p>
       <p><b>단축키</b>: R / Shift+R 회전 · K 사상자 표시 · Delete 테이블에서 제거 · , . 이전/다음 단계 · Ctrl+Z 실행취소 · Esc 취소 · Space+드래그 화면 이동 · 휠 확대/축소</p>
+      <p><b>로스터 가져오기</b>: 워해머 공식 앱에서 내보낸 로스터 텍스트를 붙여넣으면 유닛과 모델 수를 자동으로 만듭니다. 베이스 크기는 로스터에 없으니 확인 화면에서 고르세요. 기본은 맵에 놓지 않고 목록에만 추가되며, 각 유닛의 “배치” 버튼으로 놓으면 됩니다.</p>
       <p><b>배경 맵</b>: 도구 막대의 목록에서 고르면 맵 크기가 그 배치도에 맞춰집니다. 목록은 <code>maps/maps.js</code>에서 관리하고, 이미지는 <code>maps/40k/</code> 같은 폴더에 둡니다. “배경” 버튼으로 숨기기, 옆 슬라이더로 투명도 조절. 배경 위의 격자가 겹쳐 보이면 “격자”를 끄세요.</p>
       <p><b>이동 거리</b>: 모델을 끄는 동안 직전 단계 위치에서 몇 인치 움직였는지 표시됩니다(베이스 중심 간 직선거리). “이전 위치”를 켜면 움직인 모델의 경로 위에 거리가 계속 보입니다.</p>
       <p><b>저장</b>: 브라우저에 자동 저장되지만, 보관은 반드시 “내보내기(JSON)”로 하세요. 그 파일을 “불러오기”로 다시 열 수 있습니다.</p>
     </div></details></div>
   </aside>
 </main>
+<footer id="copyright">
+  배경 맵에 사용된 배치도 이미지의 모든 권리는 Games Workshop에 있습니다. 이 도구는 Games Workshop과 관련 없는 비공식 팬 제작 도구입니다.<span class="en"><br>
+  Battlefield layout images © Games Workshop Limited. Warhammer 40,000 and all associated names and images are ® or ™ Games Workshop Limited. Used without permission; no challenge to their status intended. This is an unofficial fan-made tool.</span>
+</footer>
 
 <dialog id="dlg">
   <h2>게임 설정</h2>
@@ -143,6 +155,26 @@ details summary{cursor:pointer;font-weight:600}
   <div class="row"><label></label><button type="button" id="sAddPlayer">+ 플레이어</button></div>
   <p class="muted">단계 기록은 순서 번호로 저장되므로 이름을 바꿔도 유지됩니다. 라운드·페이즈 수를 줄이면 해당 기록은 숨겨질 뿐, 다시 늘리면 돌아옵니다.</p>
   <div class="row" style="justify-content:flex-end"><button type="button" id="sCancel">취소</button><button type="button" id="sOk">저장</button></div>
+</dialog>
+
+<dialog id="rDlg" style="max-width:760px">
+  <h2>로스터 가져오기</h2>
+  <div id="rStep1">
+    <p class="muted" style="margin-top:0">워해머 공식 앱에서 내보낸 로스터 텍스트를 붙여넣거나, 텍스트 파일을 여세요.</p>
+    <textarea id="rText" rows="12" placeholder="로스터 텍스트를 여기에 붙여넣기"></textarea>
+    <div class="row"><button type="button" id="rFileBtn">텍스트 파일 열기…</button><input type="file" id="rFile" accept=".txt,text/plain" hidden>
+      <span class="grow"></span><button type="button" class="rClose">취소</button><button type="button" id="rParse">다음 ▶</button></div>
+  </div>
+  <div id="rStep2" hidden>
+    <div class="row"><label>소속</label><select id="rSide"></select><span class="muted" id="rInfo"></span></div>
+    <p class="muted" style="margin:4px 0">로스터에는 베이스 크기가 없어서 기본값(원형 32mm)이 들어가 있습니다. 표에서 이름(토큰에 표시됨)과 베이스를 고치세요. 나중에 유닛 목록의 “수정”으로도 바꿀 수 있습니다.</p>
+    <div style="max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:5px">
+      <table id="rTable" style="width:100%;border-collapse:collapse;font-size:12px"></table>
+    </div>
+    <div class="row"><label style="width:auto"><input type="checkbox" id="rPlace"> 가져온 뒤 현재 단계 맵에 바로 배치</label></div>
+    <div class="row"><label style="width:auto"><input type="checkbox" id="rMemo" checked> 로스터 원문을 게임 전체 메모에 추가</label></div>
+    <div class="row"><button type="button" id="rBack">◀ 이전</button><span class="grow"></span><button type="button" class="rClose">취소</button><button type="button" id="rOk">유닛 추가</button></div>
+  </div>
 </dialog>
 
 <!-- 배경 맵 목록: 파일이 없어도 페이지는 정상 동작합니다 -->
@@ -620,7 +652,9 @@ function placeUnit(u, pos) {
   const cols = Math.max(1, Math.min(ms.length, Math.ceil(Math.sqrt(ms.length * 2.5))));
   const rows = Math.ceil(ms.length / cols), bwid = cols * (bw + gap), bhei = rows * (bh + gap);
   const bands = u.side === 0 ? [0.82, 0.68, 0.55] : u.side === 1 ? [0.18, 0.32, 0.45] : [0.5, 0.35, 0.65];
-  const busy = (x0, y0) => Object.values(pos).some(p => p.x > x0 - 4 && p.x < x0 + bwid + 4 && p.y > y0 - 4 && p.y < y0 + bhei + 4);
+  // 이미 놓인 모델의 베이스 크기만큼 여유를 두고 빈자리 찾기
+  const pad = 4 + Math.max(0, ...S.units.map(x => Math.max(x.w, x.shape === 'oval' ? x.h : x.w))) / 2;
+  const busy = (x0, y0) => Object.values(pos).some(p => p.x > x0 - pad && p.x < x0 + bwid + pad && p.y > y0 - pad && p.y < y0 + bhei + pad);
   let x0 = null, y0 = null;
   outer: for (const b of bands) { const yy = Math.max(0, Math.min(H - bhei, H * b - bhei / 2));
     for (let x = gap; x + bwid <= W; x += Math.max(10, bwid * 0.5)) if (!busy(x, yy)) { x0 = x; y0 = yy; break outer; } }
@@ -758,7 +792,7 @@ svg.addEventListener('contextmenu', e => e.preventDefault());
 
 // ---------- 키보드 ----------
 document.addEventListener('keydown', e => {
-  if ($('dlg').open) return;
+  if ($('dlg').open || $('rDlg').open) return;
   const tag = e.target.tagName || '';
   if (/INPUT|TEXTAREA|SELECT/.test(tag) || e.target.isContentEditable) return;
   const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
@@ -901,6 +935,119 @@ $('uList').onclick = e => {
     pushUndo(); removeModelsEverywhere(S.models.filter(m => m.unitId === u.id).map(m => m.id));
     S.units = S.units.filter(x => x !== u); ui.sel = []; if (ui.editUnit === u.id) resetUnitForm(); commit();
   }
+};
+
+// ---------- 로스터 가져오기 ----------
+// 워해머 공식 앱 텍스트 내보내기 형식:
+//   유닛 줄 = 들여쓰기 없이 "이름 (NN포인트)" 이고 바로 다음 줄이 "•" 목록
+//   "• Nx 모델명" 아래에 다시 "•" 하위 목록(무장)이 있으면 모델 그룹 → 모델 수를 합산
+//   모델 그룹이 없으면 단일 모델 유닛
+function parseRoster(text) {
+  const lines = text.replace(/\r/g, '').replace(/\t/g, '    ').split('\n');
+  const ptsRe = /^(\S.*?)\s*[(（]\s*([\d,]+)\s*(?:포인트|points?|pts?\.?)\s*[)）]\s*$/i;
+  const bulRe = /^(\s*)[•·▪◦‣\-*]\s+(.*\S)\s*$/;
+  const cntRe = /^(\d+)\s*[x×X]\s+(.+)$/;
+  const ind = s => s.length - s.trimStart().length;
+  const nextIdx = i => { for (let j = i + 1; j < lines.length; j++) if (lines[j].trim()) return j; return -1; };
+  const out = [];
+  let title = '';
+  for (let i = 0; i < lines.length; i++) {
+    const L = lines[i];
+    if (!L.trim()) continue;
+    if (!title) title = L.trim();
+    if (ind(L) > 0 || bulRe.test(L)) continue;
+    const m = ptsRe.exec(L.trim()); if (!m) continue;
+    const j = nextIdx(i); if (j < 0 || !bulRe.test(lines[j])) continue;
+    // 유닛 블록: 다음 '들여쓰기 없는 일반 줄'까지
+    const ents = [];
+    let k = i + 1;
+    for (; k < lines.length; k++) {
+      const s = lines[k]; if (!s.trim()) continue;
+      const b = bulRe.exec(s);
+      if (b) ents.push({ind:b[1].length, text:[b[2].trim()]});
+      else if (ind(s) > 0 && ents.length) ents[ents.length - 1].text.push(s.trim());
+      else break;
+    }
+    i = k - 1;
+    if (!ents.length) continue;
+    const top = Math.min(...ents.map(e => e.ind));
+    const groups = [];
+    ents.forEach((e, n) => {
+      if (e.ind !== top) return;
+      const nx = ents[n + 1];
+      const cm = cntRe.exec(e.text[0]);
+      if (nx && nx.ind > top && cm) groups.push({n:parseInt(cm[1]), name:cm[2].trim()});
+    });
+    const count = groups.length ? groups.reduce((a, g) => a + g.n, 0) : 1;
+    out.push({name:m[1].trim(), pts:parseInt(m[2].replace(/,/g, '')), count,
+      comp: groups.length ? groups.map(g => `${g.n}× ${g.name}`).join(', ') : '단일 모델'});
+  }
+  // 같은 이름이 여러 번 나오면 번호 붙이기
+  const seen = {};
+  out.forEach(u => { const c = (seen[u.name] = (seen[u.name] || 0) + 1); if (c > 1) u.name += ' ' + c; });
+  return {title, units:out};
+}
+
+let rRows = [], rTitle = '';
+const BASE_OPTS = `<option value="">규격…</option>` + BASES.map(b => `<option value="${b.join(':')}">${b[0] === 'oval' ? `타원 ${b[1]}×${b[2]}` : `원형 ${b[1]}`}</option>`).join('');
+function renderRosterTable() {
+  const t = $('rTable');
+  t.innerHTML = `<tr><th></th><th>이름 <span class="muted">(토큰 표시)</span></th><th>모델</th><th>베이스 (mm)</th></tr>` +
+    rRows.map((r, i) => `<tr data-i="${i}" class="${r.on ? '' : 'off'}">
+      <td><input type="checkbox" data-f="on" ${r.on ? 'checked' : ''}></td>
+      <td><input type="text" data-f="name" value="${esc(r.name)}"><div class="wg" title="${esc(r.comp)}">${esc(r.comp)} · ${r.pts}pt</div></td>
+      <td><input type="number" data-f="count" min="1" max="300" value="${r.count}"></td>
+      <td style="white-space:nowrap"><select data-f="preset">${BASE_OPTS}</select>
+        <select data-f="shape"><option value="circle"${r.shape === 'circle' ? ' selected' : ''}>원형</option><option value="oval"${r.shape === 'oval' ? ' selected' : ''}>타원</option></select>
+        <input type="number" data-f="w" min="5" value="${r.w}"><span style="${r.shape === 'oval' ? '' : 'visibility:hidden'}"> × <input type="number" data-f="h" min="5" value="${r.h}"></span></td></tr>`).join('');
+  const on = rRows.filter(r => r.on);
+  $('rInfo').textContent = `${rTitle ? rTitle + ' · ' : ''}유닛 ${on.length}/${rRows.length}개 · 모델 ${on.reduce((a, r) => a + r.count, 0)}개 · ${on.reduce((a, r) => a + r.pts, 0)}pt`;
+}
+$('rTable').addEventListener('change', e => {
+  const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+  const r = rRows[+tr.dataset.i], f = e.target.dataset.f, v = e.target.value;
+  if (f === 'on') r.on = e.target.checked;
+  else if (f === 'name') r.name = v;
+  else if (f === 'count') r.count = Math.max(1, Math.min(300, parseInt(v) || 1));
+  else if (f === 'shape') { r.shape = v; if (v === 'circle') r.h = r.w; }
+  else if (f === 'w') { r.w = Math.max(5, parseFloat(v) || 32); if (r.shape === 'circle') r.h = r.w; }
+  else if (f === 'h') r.h = Math.max(5, parseFloat(v) || r.w);
+  else if (f === 'preset' && v) { const [s, w, h] = v.split(':'); r.shape = s; r.w = +w; r.h = +(h || w); }
+  if (f !== 'name') renderRosterTable();
+});
+$('rTable').addEventListener('input', e => { if (e.target.dataset.f === 'name') { const tr = e.target.closest('tr[data-i]'); rRows[+tr.dataset.i].name = e.target.value; } });
+function rosterStep(n) { $('rStep1').hidden = n !== 1; $('rStep2').hidden = n !== 2; }
+$('bRoster').onclick = () => { rosterStep(1); $('rDlg').showModal(); $('rText').focus(); };
+document.querySelectorAll('#rDlg .rClose').forEach(b => b.onclick = () => $('rDlg').close());
+$('rFileBtn').onclick = () => $('rFile').click();
+$('rFile').onchange = e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+  rd.onload = () => { $('rText').value = rd.result; }; rd.readAsText(f, 'utf-8'); e.target.value = ''; };
+$('rParse').onclick = () => {
+  const res = parseRoster($('rText').value);
+  if (!res.units.length) { alert('유닛을 찾지 못했습니다.\n“유닛 이름 (00포인트)” 줄과 그 아래 “•” 목록이 있는 로스터 텍스트인지 확인하세요.'); return; }
+  rTitle = res.title;
+  rRows = res.units.map(u => ({...u, on:true, shape:'circle', w:32, h:32}));
+  $('rSide').innerHTML = S.structure.players.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join('');
+  $('rSide').value = $('uSide').value || '0';
+  renderRosterTable(); rosterStep(2);
+};
+$('rBack').onclick = () => rosterStep(1);
+$('rOk').onclick = () => {
+  const rows = rRows.filter(r => r.on && r.name.trim()); if (!rows.length) { alert('추가할 유닛을 하나 이상 고르세요.'); return; }
+  const side = parseInt($('rSide').value) || 0, place = $('rPlace').checked;
+  pushUndo();
+  const pos = place ? ownPos() : null;
+  for (const r of rows) {
+    const u = {id:uid(), name:r.name.trim(), side, shape:r.shape, w:r.w, h:r.shape === 'oval' ? r.h : r.w};
+    S.units.push(u);
+    for (let i = 1; i <= r.count; i++) S.models.push({id:uid(), unitId:u.id, n:i});
+    if (place) placeUnit(u, pos);
+  }
+  if ($('rMemo').checked) {
+    const txt = $('rText').value.trim();
+    S.meta.memo = (S.meta.memo ? S.meta.memo.replace(/\s+$/, '') + '\n\n' : '') + `[${playerName(side)} 로스터]\n` + txt;
+  }
+  $('rDlg').close(); commit();
 };
 
 // ---------- 설정 대화상자 ----------
